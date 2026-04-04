@@ -6,12 +6,12 @@
 
 	const links = [
 		{ href: '/', label: 'Home' },
-		{ href: '/your-nashville', label: 'Your Nashville' },
+		{ href: '/your-nashville', label: 'My Reps' },
 		{ href: '/whats-happening', label: "What's Happening" },
 		{ href: '/legislation', label: 'Bills' },
+		{ href: '/elections', label: 'Elections' },
 		{ href: '/contact', label: 'Contact' },
-		{ href: '/how-it-works', label: 'How It Works' },
-		{ href: '/about', label: 'About' }
+		{ href: '/how-it-works', label: 'How It Works' }
 	];
 
 	function isActive(href: string): boolean {
