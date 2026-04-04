@@ -8,6 +8,7 @@
 		{ href: '/', label: 'Home' },
 		{ href: '/your-nashville', label: 'Your Nashville' },
 		{ href: '/whats-happening', label: "What's Happening" },
+		{ href: '/legislation', label: 'Bills' },
 		{ href: '/contact', label: 'Contact' },
 		{ href: '/how-it-works', label: 'How It Works' },
 		{ href: '/about', label: 'About' }

@@ -104,6 +104,7 @@ export interface NarrativeLegislation {
 	topics: Topic[];
 	interestLevel: 'high' | 'normal';
 	controversyScore: number; // 1-10
+	legistarUrl: string;
 }
 
 export interface NarrativeMeeting {
@@ -191,7 +192,8 @@ Respond as JSON array: [{"index": 1, "summary": "...", "tension": "...", "status
 			sponsors: m.MatterBodyName,
 			topics: (ai?.topics || ['Other']) as Topic[],
 			interestLevel: (ai?.interestLevel === 'high' ? 'high' : 'normal') as 'high' | 'normal',
-			controversyScore: Math.max(1, Math.min(10, ai?.controversyScore || 1))
+			controversyScore: Math.max(1, Math.min(10, ai?.controversyScore || 1)),
+			legistarUrl: `https://nashville.legistar.com/LegislationDetail.aspx?ID=${m.MatterId}`
 		};
 	});
 }
@@ -367,8 +369,8 @@ export function generateStoryCards(
 				controversyScore: item.controversyScore,
 				source: 'legislation',
 				sourceDetail: item.fileNumber,
-				link: '/whats-happening',
-				linkLabel: 'See all legislation'
+				link: '/legislation',
+				linkLabel: 'See all bills'
 			});
 		}
 	}
