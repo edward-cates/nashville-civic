@@ -130,7 +130,7 @@ export interface NarrativeMeetingIssue {
 
 // --- Legislation ---
 
-export async function summarizeLegislation(matters: Array<{
+type MatterInput = {
 	MatterId: number;
 	MatterFile: string;
 	MatterName: string;
@@ -139,25 +139,28 @@ export async function summarizeLegislation(matters: Array<{
 	MatterStatusName: string;
 	MatterIntroDate: string;
 	MatterBodyName: string;
-}>): Promise<NarrativeLegislation[]> {
-	if (!matters.length) return [];
+};
 
-	const itemsList = matters.map((m, i) =>
+type AiResult = {
+	index: number; summary: string; tension: string;
+	statusExplained: string; topics: string[]; interestLevel: string;
+	controversyScore?: number;
+};
+
+const BATCH_SIZE = 10;
+
+async function summarizeBatch(batch: MatterInput[], batchOffset: number): Promise<AiResult[]> {
+	const itemsList = batch.map((m, i) =>
 		`${i + 1}. [${m.MatterFile}] "${m.MatterTitle || m.MatterName}" — Type: ${m.MatterTypeName}, Status: ${m.MatterStatusName}`
 	).join('\n');
 
 	const key = cacheKey('leg', itemsList);
 	const cached = getCached(key);
-	let results: Array<{
-		index: number; summary: string; tension: string;
-		statusExplained: string; topics: string[]; interestLevel: string;
-		controversyScore?: number;
-	}> = [];
-
 	if (cached) {
-		results = JSON.parse(cached);
-	} else {
-		const prompt = `Classify and summarize these Nashville Metro Council items.
+		try { return JSON.parse(cached); } catch { /* fall through */ }
+	}
+
+	const prompt = `Classify and summarize these Nashville Metro Council items.
 
 For each item return JSON with:
 - "summary": 1-2 sentences. What is this and why should someone care? Be concrete.
@@ -172,30 +175,59 @@ ${itemsList}
 
 Respond as JSON array: [{"index": 1, "summary": "...", "tension": "...", "statusExplained": "...", "topics": [...], "interestLevel": "high|normal", "controversyScore": 5}, ...]`;
 
-		const text = await callClaude(prompt);
-		results = extractJson(text) || [];
-		if (results.length) setCache(key, JSON.stringify(results));
+	const text = await callClaude(prompt);
+	const results = extractJson<AiResult[]>(text) || [];
+	if (results.length) setCache(key, JSON.stringify(results));
+	return results;
+}
+
+export async function summarizeLegislation(matters: MatterInput[]): Promise<NarrativeLegislation[]> {
+	if (!matters.length) return [];
+
+	// Split into batches and process in parallel
+	const batches: MatterInput[][] = [];
+	for (let i = 0; i < matters.length; i += BATCH_SIZE) {
+		batches.push(matters.slice(i, i + BATCH_SIZE));
 	}
 
-	return matters.map((m, i) => {
-		const ai = results.find(s => s.index === i + 1);
-		return {
-			id: m.MatterId,
-			fileNumber: m.MatterFile,
-			title: m.MatterTitle || m.MatterName,
-			summary: ai?.summary || '',
-			tension: ai?.tension || '',
-			status: m.MatterStatusName,
-			statusExplained: ai?.statusExplained || m.MatterStatusName,
-			type: m.MatterTypeName,
-			introDate: m.MatterIntroDate,
-			sponsors: m.MatterBodyName,
-			topics: (ai?.topics || ['Other']) as Topic[],
-			interestLevel: (ai?.interestLevel === 'high' ? 'high' : 'normal') as 'high' | 'normal',
-			controversyScore: Math.max(1, Math.min(10, ai?.controversyScore || 1)),
-			legistarUrl: `https://nashville.legistar.com/LegislationDetail.aspx?ID=${m.MatterId}`
-		};
-	});
+	const batchResults = await Promise.all(
+		batches.map((batch, i) => summarizeBatch(batch, i * BATCH_SIZE).catch(() => [] as AiResult[]))
+	);
+
+	// Flatten results
+	const allResults: AiResult[] = [];
+	for (const results of batchResults) {
+		allResults.push(...results);
+	}
+
+	// Map batched results back to NarrativeLegislation
+	const mapped: NarrativeLegislation[] = [];
+	for (let b = 0; b < batches.length; b++) {
+		const batch = batches[b];
+		const results = batchResults[b] || [];
+		for (let i = 0; i < batch.length; i++) {
+			const m = batch[i];
+			const ai = results.find(s => s.index === i + 1);
+			mapped.push({
+				id: m.MatterId,
+				fileNumber: m.MatterFile,
+				title: m.MatterTitle || m.MatterName,
+				summary: ai?.summary || '',
+				tension: ai?.tension || '',
+				status: m.MatterStatusName,
+				statusExplained: ai?.statusExplained || m.MatterStatusName,
+				type: m.MatterTypeName,
+				introDate: m.MatterIntroDate,
+				sponsors: m.MatterBodyName,
+				topics: (ai?.topics || ['Other']) as Topic[],
+				interestLevel: (ai?.interestLevel === 'high' ? 'high' : 'normal') as 'high' | 'normal',
+				controversyScore: Math.max(1, Math.min(10, ai?.controversyScore || 1)),
+				legistarUrl: `https://nashville.legistar.com/LegislationDetail.aspx?ID=${m.MatterId}`
+			});
+		}
+	}
+
+	return mapped;
 }
 
 // --- Meetings with agenda issues ---
