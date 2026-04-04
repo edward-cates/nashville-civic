@@ -22,16 +22,66 @@
 </svelte:head>
 
 {#if !data.address}
-	<!-- No address yet -->
-	<section class="py-16 sm:py-24">
+	<!-- Default view: Nashville-wide reps -->
+	<section class="bg-civic-900 text-white py-12 sm:py-16">
+		<div class="max-w-3xl mx-auto px-4 sm:px-6">
+			<h1 class="text-3xl sm:text-4xl font-bold mb-3">Who Represents Nashville?</h1>
+			<p class="text-civic-200 text-lg leading-relaxed mb-8">
+				These leaders represent everyone in Nashville. Enter your address below to also see your specific district council member, state legislators, and U.S. House rep.
+			</p>
+			<AddressSearch />
+		</div>
+	</section>
+
+	<!-- Mayor -->
+	{#if data.mayor}
+		<section class="py-12 sm:py-16">
+			<div class="max-w-3xl mx-auto px-4 sm:px-6">
+				<div class="flex items-center gap-3 mb-6">
+					<Landmark class="h-7 w-7 text-civic-700" />
+					<h2 class="text-2xl font-bold text-civic-900">The Mayor</h2>
+				</div>
+				<div class="bg-white rounded-xl border border-gray-200 p-6">
+					<p class="text-xl font-bold text-gray-900">{data.mayor.name}</p>
+					<p class="text-gray-600 text-sm mb-3">{data.mayor.office} · {data.mayor.party}</p>
+					<p class="text-gray-600 leading-relaxed mb-4">
+						The mayor runs Nashville's day-to-day government, proposes the city budget, and manages all Metro departments. While your council member votes on laws, the mayor decides how they get carried out.
+					</p>
+					<div class="flex flex-wrap gap-3 text-sm">
+						<a href="tel:{data.mayor.phone}" class="text-civic-700 hover:text-civic-900 underline underline-offset-2">{data.mayor.phone}</a>
+						<a href="mailto:{data.mayor.email}" class="text-civic-700 hover:text-civic-900 underline underline-offset-2">{data.mayor.email}</a>
+					</div>
+				</div>
+			</div>
+		</section>
+	{/if}
+
+	<!-- Governor -->
+	{#if data.stateReps && data.stateReps.length > 0}
+		<section class="py-12 sm:py-16 bg-gray-50">
+			<div class="max-w-3xl mx-auto px-4 sm:px-6">
+				<div class="flex items-center gap-3 mb-4">
+					<Users class="h-7 w-7 text-civic-700" />
+					<h2 class="text-2xl font-bold text-civic-900">State Leadership</h2>
+				</div>
+				<p class="text-gray-600 text-lg mb-6 leading-relaxed">
+					The governor and state legislature make decisions about education, healthcare, gun laws, and taxes that affect Nashville — sometimes overriding what the city wants.
+				</p>
+				<div class="grid gap-4 sm:grid-cols-2">
+					{#each data.stateReps as rep}
+						<RepCard {rep} />
+					{/each}
+				</div>
+			</div>
+		</section>
+	{/if}
+
+	<!-- Prompt for address -->
+	<section class="py-12 sm:py-16">
 		<div class="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-			<MapPin class="h-12 w-12 text-civic-600 mx-auto mb-6" />
-			<h1 class="text-3xl sm:text-4xl font-bold text-civic-900 mb-4">
-				Let's find your Nashville representatives
-			</h1>
-			<p class="text-lg text-gray-600 mb-10 max-w-xl mx-auto leading-relaxed">
-				Enter your address and we'll show you everyone who represents you, from your local council
-				member all the way up to your U.S. senators. It takes about two seconds.
+			<h2 class="text-2xl font-bold text-civic-900 mb-3">Want to see your full team?</h2>
+			<p class="text-gray-600 text-lg mb-8 max-w-lg mx-auto">
+				Enter your address to see your specific Metro Council member, TN state senator and representative, and U.S. House rep.
 			</p>
 			<AddressSearch />
 		</div>
@@ -252,6 +302,58 @@
 						<RepCard {rep} />
 					{/each}
 				</div>
+
+				<!-- State rep bills -->
+				{#if data.stateRepBills && data.stateRepBills.length > 0}
+					<div class="mt-8 pt-8 border-t border-gray-200">
+						<div class="flex items-center gap-2 mb-3">
+							<FileText class="h-5 w-5 text-amber-600" />
+							<h3 class="text-lg font-semibold text-gray-900">Bills Your State Reps Are Working On</h3>
+						</div>
+						<p class="text-gray-600 text-sm mb-4">
+							These are bills your Tennessee state legislators have sponsored or co-sponsored. State laws override city laws — what happens here directly affects Nashville.
+						</p>
+						<div class="space-y-3">
+							{#each data.stateRepBills as bill}
+								<div class="bg-white rounded-lg border {bill.controversyScore >= 7 ? 'border-amber-200' : 'border-gray-100'} p-4">
+									<div class="flex items-start justify-between gap-2 mb-1">
+										<div>
+											{#if bill.summary}
+												<p class="text-sm text-gray-800 leading-relaxed">{bill.summary}</p>
+											{:else}
+												<p class="text-sm text-gray-800 leading-relaxed">{bill.title}</p>
+											{/if}
+										</div>
+										{#if bill.controversyScore >= 7}
+											<Flame class="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+										{/if}
+									</div>
+									{#if bill.tension}
+										<p class="text-xs italic text-gray-500 mt-2 leading-relaxed border-l-2 {bill.controversyScore >= 7 ? 'border-amber-400' : 'border-gray-200'} pl-2">{bill.tension}</p>
+									{/if}
+									<div class="flex items-center justify-between mt-2">
+										<span class="text-xs text-gray-400">{bill.fileNumber} · {bill.status}</span>
+										{#if bill.controversyScore > 0}
+											<div class="flex items-center gap-1.5">
+												<div class="w-12 h-1 bg-gray-100 rounded-full overflow-hidden">
+													<div class="{barColor(bill.controversyScore)} h-full rounded-full" style="width: {bill.controversyScore * 10}%"></div>
+												</div>
+												<span class="text-xs text-gray-400">{bill.controversyScore}/10</span>
+											</div>
+										{/if}
+									</div>
+									<a href={bill.sourceUrl} target="_blank" rel="noopener noreferrer"
+										class="inline-flex items-center gap-1 text-xs text-civic-700 hover:text-civic-900 mt-1.5 transition-colors">
+										Official record <ExternalLink class="h-3 w-3" />
+									</a>
+								</div>
+							{/each}
+						</div>
+						<a href="/legislation?level=state" class="inline-block mt-4 text-sm text-civic-700 hover:text-civic-900 underline underline-offset-2 transition-colors">
+							See all Tennessee legislation →
+						</a>
+					</div>
+				{/if}
 			</div>
 		</section>
 	{/if}
