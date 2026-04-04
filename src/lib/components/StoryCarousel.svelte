@@ -48,16 +48,16 @@
 						</div>
 
 						<!-- Headline -->
-						<h3 class="text-base font-semibold text-gray-900 mb-2 leading-snug line-clamp-2">{card.headline}</h3>
+						<h3 class="text-base font-semibold text-gray-900 mb-2 leading-snug ">{card.headline}</h3>
 
 						<!-- Body (only if different from headline) -->
 						{#if card.body && card.body !== card.headline}
-							<p class="text-sm text-gray-600 leading-relaxed mb-3 line-clamp-3">{card.body}</p>
+							<p class="text-sm text-gray-600 leading-relaxed mb-3 ">{card.body}</p>
 						{/if}
 
 						<!-- Tension / Both sides -->
 						{#if card.tension}
-							<p class="text-sm text-gray-500 italic leading-relaxed border-l-2 {card.controversyScore >= 7 ? 'border-amber-400' : card.controversyScore >= 4 ? 'border-amber-300' : 'border-gray-200'} pl-2.5 line-clamp-3">
+							<p class="text-sm text-gray-500 italic leading-relaxed border-l-2 {card.controversyScore >= 7 ? 'border-amber-400' : card.controversyScore >= 4 ? 'border-amber-300' : 'border-gray-200'} pl-2.5 ">
 								{card.tension}
 							</p>
 						{/if}
