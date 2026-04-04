@@ -29,11 +29,11 @@
 </script>
 
 {#if cards.length > 0}
-	<div class="relative -mx-4 sm:mx-0">
-		<div class="flex gap-4 overflow-x-auto px-4 sm:px-0 pb-4 snap-x snap-mandatory scrollbar-thin">
+	<div class="relative -mx-4 sm:-mx-2">
+		<div class="flex gap-3 overflow-x-auto px-4 sm:px-2 pb-4 snap-x snap-mandatory scrollbar-thin">
 			{#each cards as card}
 				<article
-					class="snap-start shrink-0 w-[85vw] sm:w-[340px] bg-white rounded-xl shadow-sm border {card.controversyScore >= 7 ? 'border-amber-200' : 'border-gray-100'} p-5 flex flex-col justify-between"
+					class="snap-center shrink-0 w-[78vw] sm:w-[320px] bg-white rounded-xl shadow-sm border {card.controversyScore >= 7 ? 'border-amber-200' : 'border-gray-100'} p-5 flex flex-col justify-between"
 				>
 					<div>
 						<!-- Header: source + topic + score -->
