@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { env } from '$env/dynamic/private';
 
 const CACHE = new Map<string, { text: string; expires: number }>();
+const INFLIGHT = new Map<string, Promise<string>>(); // dedup concurrent requests
 const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
 
 const SYSTEM_PROMPT = `You are writing for Nashville Civic, a local politics site. Explain Nashville government activity so a 15-year-old gets it.
@@ -45,6 +46,28 @@ function getCached(key: string): string | null {
 
 function setCache(key: string, text: string): void {
 	CACHE.set(key, { text, expires: Date.now() + CACHE_TTL });
+}
+
+// Dedup: if the same key is already in-flight, return the same promise
+async function dedup<T>(key: string, fn: () => Promise<T>): Promise<T> {
+	const cached = getCached(key);
+	if (cached) return JSON.parse(cached);
+
+	const existing = INFLIGHT.get(key);
+	if (existing) return existing.then(t => JSON.parse(t));
+
+	const promise = fn().then(result => {
+		const text = JSON.stringify(result);
+		setCache(key, text);
+		INFLIGHT.delete(key);
+		return result;
+	}).catch(err => {
+		INFLIGHT.delete(key);
+		throw err;
+	});
+
+	INFLIGHT.set(key, promise.then(r => JSON.stringify(r)));
+	return promise;
 }
 
 async function callClaude(prompt: string, maxTokens = 4096): Promise<string> {
@@ -156,12 +179,9 @@ async function summarizeBatch(batch: MatterInput[], batchOffset: number): Promis
 	).join('\n');
 
 	const key = cacheKey('leg', itemsList);
-	const cached = getCached(key);
-	if (cached) {
-		try { return JSON.parse(cached); } catch { /* fall through */ }
-	}
 
-	const prompt = `Classify and summarize these Nashville Metro Council items.
+	return dedup(key, async () => {
+		const prompt = `Classify and summarize these Nashville Metro Council items.
 
 For each item return JSON with:
 - "summary": 1-2 sentences. What is this and why should someone care? Be concrete.
@@ -176,10 +196,9 @@ ${itemsList}
 
 Respond as JSON array: [{"index": 1, "summary": "...", "tension": "...", "statusExplained": "...", "topics": [...], "interestLevel": "high|normal", "controversyScore": 5}, ...]`;
 
-	const text = await callClaude(prompt);
-	const results = extractJson<AiResult[]>(text) || [];
-	if (results.length) setCache(key, JSON.stringify(results));
-	return results;
+		const text = await callClaude(prompt);
+		return extractJson<AiResult[]>(text) || [];
+	});
 }
 
 export async function summarizeLegislation(matters: MatterInput[]): Promise<NarrativeLegislation[]> {
@@ -255,12 +274,9 @@ async function summarizeStateBatch(batch: StateBillInput[]): Promise<AiResult[]>
 	}).join('\n');
 
 	const key = cacheKey('stleg', itemsList);
-	const cached = getCached(key);
-	if (cached) {
-		try { return JSON.parse(cached); } catch { /* fall through */ }
-	}
 
-	const prompt = `Classify and summarize these Tennessee state legislature bills. These affect Nashville because Nashville is in Tennessee — state laws override local ones.
+	return dedup(key, async () => {
+		const prompt = `Classify and summarize these Tennessee state legislature bills. These affect Nashville because Nashville is in Tennessee — state laws override local ones.
 
 For each item return JSON with:
 - "summary": 1-2 sentences. What is this and why should a Nashville resident care? Be concrete. This is STATE legislation, not city council.
@@ -275,10 +291,9 @@ ${itemsList}
 
 Respond as JSON array: [{"index": 1, "summary": "...", "tension": "...", "statusExplained": "...", "topics": [...], "interestLevel": "high|normal", "controversyScore": 5}, ...]`;
 
-	const text = await callClaude(prompt);
-	const results = extractJson<AiResult[]>(text) || [];
-	if (results.length) setCache(key, JSON.stringify(results));
-	return results;
+		const text = await callClaude(prompt);
+		return extractJson<AiResult[]>(text) || [];
+	});
 }
 
 export async function summarizeStateBills(bills: StateBillInput[]): Promise<NarrativeLegislation[]> {
@@ -356,15 +371,13 @@ export async function summarizeMeetingsWithAgenda(
 	}).join('\n\n');
 
 	const key = cacheKey('mtg', meetingDescriptions);
-	const cached = getCached(key);
-	let results: Array<{
+
+	type MtgResult = {
 		index: number; summary: string;
 		issues: Array<{ title: string; summary: string; tension: string; topic: string; interestLevel: string; controversyScore?: number }>;
-	}> = [];
+	};
 
-	if (cached) {
-		results = JSON.parse(cached);
-	} else {
+	const results = await dedup<MtgResult[]>(key, async () => {
 		const prompt = `These are upcoming Nashville Metro Council meetings with their agenda items.
 
 For each meeting, return:
@@ -384,9 +397,8 @@ ${meetingDescriptions}
 Respond as JSON array: [{"index": 1, "summary": "...", "issues": [{"title":"...", "summary":"...", "tension":"...", "topic":"...", "interestLevel":"...", "controversyScore": 5}]}, ...]`;
 
 		const text = await callClaude(prompt);
-		results = extractJson(text) || [];
-		if (results.length) setCache(key, JSON.stringify(results));
-	}
+		return extractJson<MtgResult[]>(text) || [];
+	});
 
 	return events.map((e, i) => {
 		const ai = results.find(r => r.index === i + 1);
