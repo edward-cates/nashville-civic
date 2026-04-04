@@ -48,10 +48,13 @@ export async function dbGet(key: string): Promise<string | null> {
 
 	try {
 		const rows = await db`
-			SELECT data::text FROM api_cache
+			SELECT data FROM api_cache
 			WHERE key = ${key} AND expires_at > NOW()
 		`;
-		return rows[0]?.data ?? null;
+		if (!rows[0]?.data) return null;
+		// postgres lib auto-parses JSONB — we need a string for our cache layer
+		const val = rows[0].data;
+		return typeof val === 'string' ? val : JSON.stringify(val);
 	} catch {
 		return null;
 	}
