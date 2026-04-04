@@ -75,17 +75,31 @@
 	</div>
 </section>
 
-<!-- AI-powered content: streams in while page is already visible -->
-{#await data.aiData}
-	<!-- Loading state -->
+<!-- Story Cards — streams in first once both meetings + legislation resolve -->
+{#await data.storyCards}
 	<section class="py-12 sm:py-16 bg-civic-50">
 		<div class="max-w-3xl mx-auto px-4 sm:px-6">
 			<h2 class="text-2xl sm:text-3xl font-bold text-civic-900 mb-6">This Week in Nashville</h2>
 			<div class="bg-white rounded-xl shadow-sm border border-civic-100 p-6 sm:p-8">
-				<LoadingPulse label="Summarizing {data.meetingCount} meetings and {data.legislationCount} bills..." lines={4} />
+				<LoadingPulse label="Building story cards..." lines={3} />
 			</div>
 		</div>
 	</section>
+{:then storyCards}
+	{#if storyCards && storyCards.length > 0}
+		<section class="py-12 sm:py-16 bg-civic-50">
+			<div class="max-w-3xl mx-auto px-4 sm:px-6">
+				<h2 class="text-2xl sm:text-3xl font-bold text-civic-900 mb-6">This Week in Nashville</h2>
+				<StoryCarousel cards={storyCards} />
+			</div>
+		</section>
+	{/if}
+{:catch}
+	<!-- silent fail -->
+{/await}
+
+<!-- By Topic — streams independently from meetings -->
+{#await data.legislation}
 	<section class="py-12 sm:py-16 bg-gray-50">
 		<div class="max-w-3xl mx-auto px-4 sm:px-6">
 			<div class="flex items-center gap-3 mb-8">
@@ -95,40 +109,14 @@
 			<div class="space-y-3">
 				{#each Array(4) as _}
 					<div class="bg-white rounded-lg border border-gray-100 shadow-sm p-5">
-						<LoadingPulse label="Classifying legislation..." lines={2} />
+						<LoadingPulse label="Summarizing legislation..." lines={2} />
 					</div>
 				{/each}
 			</div>
 		</div>
 	</section>
-	<section class="py-12 sm:py-16">
-		<div class="max-w-3xl mx-auto px-4 sm:px-6">
-			<div class="flex items-center gap-3 mb-8">
-				<CalendarDays class="h-7 w-7 text-civic-700" />
-				<h2 class="text-2xl sm:text-3xl font-bold text-civic-900">Meetings This Week</h2>
-			</div>
-			<div class="space-y-6">
-				{#each Array(3) as _}
-					<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-						<LoadingPulse label="Analyzing agenda items..." lines={3} />
-					</div>
-				{/each}
-			</div>
-		</div>
-	</section>
-{:then ai}
-	<!-- Story Cards -->
-	{#if ai.storyCards && ai.storyCards.length > 0}
-		<section class="py-12 sm:py-16 bg-civic-50">
-			<div class="max-w-3xl mx-auto px-4 sm:px-6">
-				<h2 class="text-2xl sm:text-3xl font-bold text-civic-900 mb-6">This Week in Nashville</h2>
-				<StoryCarousel cards={ai.storyCards} />
-			</div>
-		</section>
-	{/if}
-
-	<!-- By Topic -->
-	{@const topicGroups = groupByTopic(ai.legislation)}
+{:then legislation}
+	{@const topicGroups = groupByTopic(legislation)}
 	{#if topicGroups.length > 0}
 		{(initExpanded(topicGroups), '')}
 		<section class="py-12 sm:py-16 bg-gray-50">
@@ -179,9 +167,33 @@
 			</div>
 		</section>
 	{/if}
+{:catch}
+	<section class="py-12 sm:py-16 bg-gray-50">
+		<div class="max-w-3xl mx-auto px-4 sm:px-6 text-center text-gray-500">
+			<p>Trouble loading legislation. <a href="/legislation" class="text-civic-700 underline">Try the bills page</a>.</p>
+		</div>
+	</section>
+{/await}
 
-	<!-- Meetings This Week -->
-	{#if ai.meetings && ai.meetings.length > 0}
+<!-- Meetings — streams independently from legislation -->
+{#await data.meetings}
+	<section class="py-12 sm:py-16">
+		<div class="max-w-3xl mx-auto px-4 sm:px-6">
+			<div class="flex items-center gap-3 mb-8">
+				<CalendarDays class="h-7 w-7 text-civic-700" />
+				<h2 class="text-2xl sm:text-3xl font-bold text-civic-900">Meetings This Week</h2>
+			</div>
+			<div class="space-y-6">
+				{#each Array(3) as _}
+					<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+						<LoadingPulse label="Analyzing meeting agendas..." lines={3} />
+					</div>
+				{/each}
+			</div>
+		</div>
+	</section>
+{:then meetings}
+	{#if meetings && meetings.length > 0}
 		<section class="py-12 sm:py-16">
 			<div class="max-w-3xl mx-auto px-4 sm:px-6">
 				<div class="flex items-center gap-3 mb-8">
@@ -189,7 +201,7 @@
 					<h2 class="text-2xl sm:text-3xl font-bold text-civic-900">Meetings This Week</h2>
 				</div>
 				<div class="space-y-6">
-					{#each ai.meetings as meeting}
+					{#each meetings as meeting}
 						<article class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
 							<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
 								<h3 class="text-lg font-semibold text-civic-800">{meeting.body}</h3>
@@ -243,12 +255,7 @@
 		</section>
 	{/if}
 {:catch}
-	<!-- AI failed — show a message -->
-	<section class="py-12 sm:py-16 bg-gray-50">
-		<div class="max-w-3xl mx-auto px-4 sm:px-6 text-center text-gray-500">
-			<p>Having trouble loading AI summaries right now. <a href="/legislation" class="text-civic-700 underline">View raw legislation</a> or try refreshing.</p>
-		</div>
-	</section>
+	<!-- silent fail for meetings -->
 {/await}
 
 <!-- Did You Know -->
