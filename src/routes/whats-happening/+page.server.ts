@@ -1,11 +1,13 @@
 import { getUpcomingMeetings, getRecentLegislation, getEventAgendaItems } from '$lib/server/legistar';
-import { summarizeLegislation, summarizeMeetingsWithAgenda, generateStoryCards } from '$lib/server/narrative';
+import { getRecentStateBills } from '$lib/server/openstates';
+import { summarizeLegislation, summarizeStateBills, summarizeMeetingsWithAgenda, generateStoryCards } from '$lib/server/narrative';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	const [rawMeetings, rawLegislation] = await Promise.all([
+	const [rawMeetings, rawMetro, rawState] = await Promise.all([
 		getUpcomingMeetings(8),
-		getRecentLegislation(20)
+		getRecentLegislation(20),
+		getRecentStateBills(15).catch(() => [])
 	]);
 
 	const agendaItemsByEvent = new Map();
@@ -16,11 +18,13 @@ export const load: PageServerLoad = async () => {
 		})
 	);
 
-	const [meetings, legislation] = await Promise.all([
+	const [meetings, metroLeg, stateLeg] = await Promise.all([
 		summarizeMeetingsWithAgenda(rawMeetings, agendaItemsByEvent),
-		summarizeLegislation(rawLegislation)
+		summarizeLegislation(rawMetro),
+		summarizeStateBills(rawState).catch(() => [])
 	]);
 
+	const legislation = [...metroLeg, ...stateLeg];
 	const storyCards = generateStoryCards(meetings, legislation);
 
 	return { meetings, legislation, storyCards };

@@ -126,7 +126,8 @@
 											<p class="text-sm italic text-gray-500 mt-1">{item.tension}</p>
 										{/if}
 										<p class="text-xs text-gray-400 mt-1">
-											{item.fileNumber} &middot; {item.status}
+											<span class="font-semibold {item.level === 'state' ? 'text-amber-600' : 'text-emerald-600'}">{item.level === 'state' ? 'State' : 'Metro'}</span>
+											&middot; {item.fileNumber} &middot; {item.status}
 										</p>
 									</div>
 								{/each}

@@ -1,25 +1,35 @@
 import { getRecentLegislation } from '$lib/server/legistar';
-import { summarizeLegislation } from '$lib/server/narrative';
+import { getRecentStateBills } from '$lib/server/openstates';
+import { summarizeLegislation, summarizeStateBills } from '$lib/server/narrative';
+import type { NarrativeLegislation } from '$lib/server/narrative';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	const rawLegislation = await getRecentLegislation(50);
+	// Fetch metro and state bills in parallel
+	const [rawMetro, rawState] = await Promise.all([
+		getRecentLegislation(30),
+		getRecentStateBills(20).catch(() => [])
+	]);
 
-	// Try AI summaries with a 10s timeout — if cache is warm this is instant,
-	// if cold we show raw data and the next visit will have summaries cached
-	let legislation;
-	try {
-		legislation = await Promise.race([
-			summarizeLegislation(rawLegislation),
-			new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
-		]);
-	} catch {
-		// Timed out or failed — return raw data without AI
-		legislation = null;
-	}
+	// Try AI summaries with 10s timeout each — graceful fallback
+	const [metro, state] = await Promise.all([
+		Promise.race([
+			summarizeLegislation(rawMetro),
+			new Promise<null>((_, reject) => setTimeout(() => reject('timeout'), 10000))
+		]).catch(() => null),
+		Promise.race([
+			summarizeStateBills(rawState),
+			new Promise<null>((_, reject) => setTimeout(() => reject('timeout'), 10000))
+		]).catch(() => null)
+	]);
 
-	if (!legislation) {
-		legislation = rawLegislation.map(m => ({
+	let legislation: NarrativeLegislation[] = [];
+
+	// Metro bills — AI or raw fallback
+	if (metro) {
+		legislation.push(...metro);
+	} else {
+		legislation.push(...rawMetro.map(m => ({
 			id: m.MatterId,
 			fileNumber: m.MatterFile,
 			title: m.MatterTitle || m.MatterName,
@@ -30,10 +40,37 @@ export const load: PageServerLoad = async () => {
 			type: m.MatterTypeName,
 			introDate: m.MatterIntroDate,
 			sponsors: m.MatterBodyName,
-			topics: ['Other'] as string[],
+			topics: ['Other'] as any[],
 			interestLevel: 'normal' as const,
 			controversyScore: 0,
-			legistarUrl: `https://nashville.legistar.com/LegislationDetail.aspx?ID=${m.MatterId}`
+			sourceUrl: `https://nashville.legistar.com/LegislationDetail.aspx?ID=${m.MatterId}`,
+			level: 'local' as const
+		})));
+	}
+
+	// State bills — AI or raw fallback
+	if (state) {
+		legislation.push(...state);
+	} else {
+		legislation.push(...rawState.map(b => {
+			const sponsors = (b.sponsorships || []).filter(s => s.classification === 'primary').map(s => s.name).join(', ');
+			return {
+				id: b.id,
+				fileNumber: b.identifier,
+				title: b.title,
+				summary: '',
+				tension: '',
+				status: b.latest_action_description || 'Unknown',
+				statusExplained: b.latest_action_description || '',
+				type: b.classification[0] || 'bill',
+				introDate: b.latest_action_date || '',
+				sponsors: sponsors || 'Unknown',
+				topics: ['Other'] as any[],
+				interestLevel: 'normal' as const,
+				controversyScore: 0,
+				sourceUrl: b.openstates_url,
+				level: 'state' as const
+			};
 		}));
 	}
 

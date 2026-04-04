@@ -35,7 +35,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	// Fetch council member detail data from Legistar
 	let localRepCommittees: Array<{ name: string; title: string }> = [];
 	let localRepBills: Array<{ fileNumber: string; title: string; summary: string; tension: string;
-		status: string; controversyScore: number; legistarUrl: string }> = [];
+		status: string; controversyScore: number; sourceUrl: string }> = [];
 	let localRepNarrative = '';
 
 	if (localRep) {
@@ -68,7 +68,7 @@ export const load: PageServerLoad = async ({ url }) => {
 							tension: b.tension,
 							status: b.statusExplained,
 							controversyScore: b.controversyScore,
-							legistarUrl: b.legistarUrl
+							sourceUrl: b.sourceUrl
 						}));
 					}
 				} catch {
@@ -80,7 +80,7 @@ export const load: PageServerLoad = async ({ url }) => {
 						tension: '',
 						status: m.MatterStatusName,
 						controversyScore: 0,
-						legistarUrl: `https://nashville.legistar.com/LegislationDetail.aspx?ID=${m.MatterId}`
+						sourceUrl: `https://nashville.legistar.com/LegislationDetail.aspx?ID=${m.MatterId}`
 					}));
 				}
 

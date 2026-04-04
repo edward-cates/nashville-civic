@@ -6,6 +6,7 @@
 
 	let searchQuery = $state('');
 	let selectedTopic = $state('all');
+	let selectedLevel = $state('all');
 
 	// Get unique topics
 	let allTopics = $derived.by(() => {
@@ -32,6 +33,10 @@
 
 		if (selectedTopic !== 'all') {
 			items = items.filter((item: any) => item.topics.includes(selectedTopic));
+		}
+
+		if (selectedLevel !== 'all') {
+			items = items.filter((item: any) => item.level === selectedLevel);
 		}
 
 		// Sort by controversy score descending
@@ -81,6 +86,14 @@
 					<option value={topic}>{topic === 'all' ? 'All Topics' : topic}</option>
 				{/each}
 			</select>
+			<select
+				bind:value={selectedLevel}
+				class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-civic-600 focus:border-transparent bg-white"
+			>
+				<option value="all">All Levels</option>
+				<option value="local">Metro Nashville</option>
+				<option value="state">Tennessee State</option>
+			</select>
 		</div>
 		<p class="text-xs text-gray-400 mt-2">
 			{filtered.length} bill{filtered.length !== 1 ? 's' : ''} · sorted by controversy
@@ -107,6 +120,7 @@
 							<!-- Header row -->
 							<div class="flex items-start justify-between gap-3 mb-3">
 								<div class="flex items-center gap-2 flex-wrap">
+									<span class="text-xs font-semibold rounded px-1.5 py-0.5 {bill.level === 'state' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}">{bill.level === 'state' ? 'State' : 'Metro'}</span>
 									<code class="text-xs font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{bill.fileNumber}</code>
 									<span class="text-xs bg-civic-50 text-civic-600 rounded px-1.5 py-0.5">{bill.type}</span>
 									{#each bill.topics as topic}
@@ -155,15 +169,15 @@
 								</div>
 							</div>
 
-							<!-- Link to Legistar -->
+							<!-- Official record link -->
 							<div class="mt-3">
 								<a
-									href={bill.legistarUrl}
+									href={bill.sourceUrl}
 									target="_blank"
 									rel="noopener noreferrer"
 									class="inline-flex items-center gap-1.5 text-sm text-civic-700 hover:text-civic-900 font-medium"
 								>
-									Official record on Legistar
+									Official record
 									<ExternalLink class="h-3.5 w-3.5" />
 								</a>
 							</div>

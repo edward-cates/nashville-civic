@@ -183,7 +183,7 @@
 												</div>
 											{/if}
 										</div>
-										<a href={bill.legistarUrl} target="_blank" rel="noopener noreferrer"
+										<a href={bill.sourceUrl} target="_blank" rel="noopener noreferrer"
 											class="inline-flex items-center gap-1 text-xs text-civic-300 hover:text-civic-100 mt-1.5 transition-colors">
 											Official record <ExternalLink class="h-3 w-3" />
 										</a>

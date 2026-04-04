@@ -91,11 +91,11 @@ export type Topic = typeof TOPICS[number] | 'Other';
 // --- Public types ---
 
 export interface NarrativeLegislation {
-	id: number;
+	id: number | string;
 	fileNumber: string;
 	title: string;
 	summary: string;
-	tension: string; // "Supporters say X. Opponents say Y." or empty if no real debate
+	tension: string;
 	status: string;
 	statusExplained: string;
 	type: string;
@@ -104,7 +104,8 @@ export interface NarrativeLegislation {
 	topics: Topic[];
 	interestLevel: 'high' | 'normal';
 	controversyScore: number; // 1-10
-	legistarUrl: string;
+	sourceUrl: string;
+	level: 'local' | 'state'; // metro council vs TN state legislature
 }
 
 export interface NarrativeMeeting {
@@ -222,7 +223,100 @@ export async function summarizeLegislation(matters: MatterInput[]): Promise<Narr
 				topics: (ai?.topics || ['Other']) as Topic[],
 				interestLevel: (ai?.interestLevel === 'high' ? 'high' : 'normal') as 'high' | 'normal',
 				controversyScore: Math.max(1, Math.min(10, ai?.controversyScore || 1)),
-				legistarUrl: `https://nashville.legistar.com/LegislationDetail.aspx?ID=${m.MatterId}`
+				sourceUrl: `https://nashville.legistar.com/LegislationDetail.aspx?ID=${m.MatterId}`,
+				level: 'local'
+			});
+		}
+	}
+
+	return mapped;
+}
+
+// --- State bills ---
+
+export interface StateBillInput {
+	id: string;
+	identifier: string;
+	title: string;
+	classification: string[];
+	subject: string[];
+	openstates_url: string;
+	latest_action_description?: string;
+	latest_action_date?: string;
+	sponsorships?: Array<{ name: string; classification: string }>;
+	abstracts?: Array<{ abstract: string }>;
+}
+
+async function summarizeStateBatch(batch: StateBillInput[]): Promise<AiResult[]> {
+	const itemsList = batch.map((b, i) => {
+		const sponsors = (b.sponsorships || []).filter(s => s.classification === 'primary').map(s => s.name).join(', ');
+		const abstract = b.abstracts?.[0]?.abstract || '';
+		return `${i + 1}. [${b.identifier}] "${b.title}" — Subjects: ${b.subject.join(', ') || 'none'}, Status: ${b.latest_action_description || 'unknown'}${sponsors ? `, Sponsor: ${sponsors}` : ''}${abstract ? `\n   Summary: ${abstract}` : ''}`;
+	}).join('\n');
+
+	const key = cacheKey('stleg', itemsList);
+	const cached = getCached(key);
+	if (cached) {
+		try { return JSON.parse(cached); } catch { /* fall through */ }
+	}
+
+	const prompt = `Classify and summarize these Tennessee state legislature bills. These affect Nashville because Nashville is in Tennessee — state laws override local ones.
+
+For each item return JSON with:
+- "summary": 1-2 sentences. What is this and why should a Nashville resident care? Be concrete. This is STATE legislation, not city council.
+- "tension": ALWAYS fill this in. For debatable items: "Supporters say [specific argument]. Opponents say [specific argument]." Nashville is a blue city in a red state — many state bills directly conflict with what Nashville voters want. Be honest about that tension without taking sides. For routine items: "Routine state business — no real controversy here." NEVER leave empty.
+- "statusExplained": 1 sentence explaining what the current status means.
+- "topics": 1-2 from: ${TOPICS.join(', ')}, Other
+- "interestLevel": "high" if contentious, big money, affects many people, or divisive. "normal" if routine.
+- "controversyScore": 1-10 integer. 1 = routine. 5 = moderate. 8-10 = deeply divisive. State preemption of Nashville policies = high controversy.
+
+Items:
+${itemsList}
+
+Respond as JSON array: [{"index": 1, "summary": "...", "tension": "...", "statusExplained": "...", "topics": [...], "interestLevel": "high|normal", "controversyScore": 5}, ...]`;
+
+	const text = await callClaude(prompt);
+	const results = extractJson<AiResult[]>(text) || [];
+	if (results.length) setCache(key, JSON.stringify(results));
+	return results;
+}
+
+export async function summarizeStateBills(bills: StateBillInput[]): Promise<NarrativeLegislation[]> {
+	if (!bills.length) return [];
+
+	const batches: StateBillInput[][] = [];
+	for (let i = 0; i < bills.length; i += BATCH_SIZE) {
+		batches.push(bills.slice(i, i + BATCH_SIZE));
+	}
+
+	const batchResults = await Promise.all(
+		batches.map(batch => summarizeStateBatch(batch).catch(() => [] as AiResult[]))
+	);
+
+	const mapped: NarrativeLegislation[] = [];
+	for (let b = 0; b < batches.length; b++) {
+		const batch = batches[b];
+		const results = batchResults[b] || [];
+		for (let i = 0; i < batch.length; i++) {
+			const bill = batch[i];
+			const ai = results.find(s => s.index === i + 1);
+			const sponsors = (bill.sponsorships || []).filter(s => s.classification === 'primary').map(s => s.name).join(', ');
+			mapped.push({
+				id: bill.id,
+				fileNumber: bill.identifier,
+				title: bill.title,
+				summary: ai?.summary || '',
+				tension: ai?.tension || '',
+				status: bill.latest_action_description || 'Unknown',
+				statusExplained: ai?.statusExplained || bill.latest_action_description || '',
+				type: bill.classification[0] || 'bill',
+				introDate: bill.latest_action_date || '',
+				sponsors: sponsors || 'Unknown',
+				topics: (ai?.topics || ['Other']) as Topic[],
+				interestLevel: (ai?.interestLevel === 'high' ? 'high' : 'normal') as 'high' | 'normal',
+				controversyScore: Math.max(1, Math.min(10, ai?.controversyScore || 1)),
+				sourceUrl: bill.openstates_url,
+				level: 'state'
 			});
 		}
 	}
