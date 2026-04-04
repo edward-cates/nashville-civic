@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { ExternalLink, Flame, Search } from 'lucide-svelte';
-	import LoadingPulse from '$lib/components/LoadingPulse.svelte';
 	import { renderMarkdown } from '$lib/markdown';
 	import type { NarrativeLegislation } from '$lib/server/narrative';
 
@@ -10,23 +9,10 @@
 	let selectedTopic = $state('all');
 	let selectedLevel = $state('all');
 
-	// Resolved legislation stored here once the promise settles
-	let legislation = $state<NarrativeLegislation[]>([]);
-	let loaded = $state(false);
-	let loadError = $state(false);
-
-	// Kick off resolution
-	data.aiData.then((result) => {
-		legislation = result;
-		loaded = true;
-	}).catch(() => {
-		loadError = true;
-	});
-
 	// Get unique topics (reactive, updates when legislation changes)
 	let allTopics = $derived.by(() => {
 		const topics = new Set<string>();
-		for (const item of legislation) {
+		for (const item of data.legislation) {
 			for (const t of item.topics) topics.add(t);
 		}
 		return ['all', ...Array.from(topics).sort()];
@@ -34,7 +20,7 @@
 
 	// Filter and sort legislation (reactive)
 	let filtered = $derived.by(() => {
-		let items = legislation;
+		let items = data.legislation;
 
 		if (searchQuery.trim()) {
 			const q = searchQuery.toLowerCase();
@@ -80,64 +66,8 @@
 	</div>
 </section>
 
-{#if loadError}
-	<!-- Error state -->
-	<section class="py-16 sm:py-24">
-		<div class="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-			<p class="text-gray-600 text-lg mb-4">
-				Something went wrong loading legislation summaries. We're working on it.
-			</p>
-			<p class="text-gray-400 text-sm mb-6">
-				The AI summarizer may be temporarily unavailable. Try refreshing in a moment.
-			</p>
-			<a
-				href="/whats-happening"
-				class="inline-block px-6 py-3 bg-civic-700 text-white rounded-lg hover:bg-civic-800 transition-colors font-medium"
-			>
-				Back to What's Happening
-			</a>
-		</div>
-	</section>
-{:else if !loaded}
-	<!-- Loading state: disabled search bar -->
-	<section class="bg-white border-b border-gray-200 sticky top-0 z-10">
-		<div class="max-w-4xl mx-auto px-4 sm:px-6 py-4">
-			<div class="flex flex-col sm:flex-row gap-3">
-				<div class="relative flex-1">
-					<Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-300" />
-					<input
-						type="text"
-						disabled
-						placeholder="Search bills, topics, keywords..."
-						class="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-400 cursor-not-allowed"
-					/>
-				</div>
-				<select disabled class="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-400 cursor-not-allowed">
-					<option>All Topics</option>
-				</select>
-				<select disabled class="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-400 cursor-not-allowed">
-					<option>All Levels</option>
-				</select>
-			</div>
-			<p class="text-xs text-gray-400 mt-2">Loading bills...</p>
-		</div>
-	</section>
-
-	<!-- Loading: Skeleton cards -->
-	<section class="py-8 sm:py-12">
-		<div class="max-w-4xl mx-auto px-4 sm:px-6">
-			<div class="space-y-4">
-				{#each Array(4) as _}
-					<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 sm:p-6">
-						<LoadingPulse lines={4} label="Summarizing {data.rawCount} bills..." />
-					</div>
-				{/each}
-			</div>
-		</div>
-	</section>
-{:else}
-	<!-- Search & Filter -->
-	<section class="bg-white border-b border-gray-200 sticky top-0 z-10">
+<!-- Search & Filter -->
+<section class="bg-white border-b border-gray-200 sticky top-0 z-10">
 		<div class="max-w-4xl mx-auto px-4 sm:px-6 py-4">
 			<div class="flex flex-col sm:flex-row gap-3">
 				<div class="relative flex-1">
@@ -259,4 +189,3 @@
 			{/if}
 		</div>
 	</section>
-{/if}

@@ -2,14 +2,12 @@ import { getSharedMeetings, getSharedLegislation, buildStoryCards } from '$lib/s
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	const meetings = getSharedMeetings().catch(() => []);
-	const legislation = getSharedLegislation().catch(() => []);
+	const [meetings, legislation] = await Promise.all([
+		getSharedMeetings(),
+		getSharedLegislation()
+	]);
 
-	// Separate calls — deduped internally, avoids promise chain issues with SSR
-	const storyCards = Promise.all([
-		getSharedMeetings().catch(() => []),
-		getSharedLegislation().catch(() => [])
-	]).then(([m, l]) => buildStoryCards(m, l)).catch(() => []);
+	const storyCards = buildStoryCards(meetings, legislation);
 
 	return { meetings, legislation, storyCards };
 };

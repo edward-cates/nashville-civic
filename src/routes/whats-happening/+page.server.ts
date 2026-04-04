@@ -2,15 +2,12 @@ import { getSharedMeetings, getSharedLegislation, buildStoryCards } from '$lib/s
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	// Each gets its own promise from the shared layer (deduped internally)
-	const meetings = getSharedMeetings().catch(() => []);
-	const legislation = getSharedLegislation().catch(() => []);
+	const [meetings, legislation] = await Promise.all([
+		getSharedMeetings(),
+		getSharedLegislation()
+	]);
 
-	// Story cards: separate call to shared layer (deduped, won't re-fetch)
-	const storyCards = Promise.all([
-		getSharedMeetings().catch(() => []),
-		getSharedLegislation().catch(() => [])
-	]).then(([m, l]) => buildStoryCards(m, l)).catch(() => []);
+	const storyCards = buildStoryCards(meetings, legislation);
 
 	return { meetings, legislation, storyCards };
 };
