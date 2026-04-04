@@ -1,5 +1,5 @@
 import { getUpcomingMeetings, getRecentLegislation, getEventAgendaItems } from '$lib/server/legistar';
-import { summarizeLegislation, summarizeMeetingsWithAgenda, generateWeeklyDigest } from '$lib/server/narrative';
+import { summarizeLegislation, summarizeMeetingsWithAgenda, generateStoryCards } from '$lib/server/narrative';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -8,7 +8,6 @@ export const load: PageServerLoad = async () => {
 		getRecentLegislation(15)
 	]);
 
-	// Fetch agenda items for each meeting in parallel
 	const agendaItemsByEvent = new Map();
 	await Promise.all(
 		rawMeetings.map(async (event) => {
@@ -22,7 +21,7 @@ export const load: PageServerLoad = async () => {
 		summarizeLegislation(rawLegislation)
 	]);
 
-	const weeklyDigest = await generateWeeklyDigest(meetings, legislation);
+	const storyCards = generateStoryCards(meetings, legislation);
 
-	return { meetings, legislation, weeklyDigest };
+	return { meetings, legislation, storyCards };
 };

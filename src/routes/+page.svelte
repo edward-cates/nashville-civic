@@ -1,5 +1,6 @@
 <script lang="ts">
 	import AddressSearch from '$lib/components/AddressSearch.svelte';
+	import StoryCarousel from '$lib/components/StoryCarousel.svelte';
 	import { CalendarDays, FileText, Lightbulb, ArrowRight, ChevronDown, ChevronRight, Flame, Tag } from 'lucide-svelte';
 	import { renderMarkdown } from '$lib/markdown';
 
@@ -78,16 +79,12 @@
 	</div>
 </section>
 
-<!-- Weekly Digest -->
-{#if data.weeklyDigest}
+<!-- This Week — Story Carousel -->
+{#if data.storyCards && data.storyCards.length > 0}
 	<section class="py-12 sm:py-16 bg-civic-50">
 		<div class="max-w-3xl mx-auto px-4 sm:px-6">
 			<h2 class="text-2xl sm:text-3xl font-bold text-civic-900 mb-6">This Week in Nashville</h2>
-			<div class="bg-white rounded-xl shadow-sm border border-civic-100 p-6 sm:p-8">
-				<div class="prose prose-lg prose-civic max-w-none text-gray-700 leading-relaxed">
-					{@html renderMarkdown(data.weeklyDigest)}
-				</div>
-			</div>
+			<StoryCarousel cards={data.storyCards} />
 		</div>
 	</section>
 {/if}

@@ -12,7 +12,8 @@ Rules:
 - Lead with why someone should care.
 - Never state opinions or recommend how to vote.
 - Be specific: names, places, dollar amounts.
-- When there's a disagreement, state BOTH sides neutrally in one sentence each. "Supporters say X. Opponents say Y."
+- ALWAYS explain both sides of any debate. Even when one side seems obviously right, present both perspectives fairly. Most people on both sides have a point — help readers see that.
+- For routine/operational items with no real debate, say so explicitly: "This is standard city business — no controversy here" or "This is a procedural vote, not a policy debate."
 - Conversational tone. Not formal.
 - Be concise. Every word must earn its place.`;
 
@@ -119,7 +120,7 @@ export interface NarrativeMeeting {
 export interface NarrativeMeetingIssue {
 	title: string;
 	summary: string;
-	tension: string; // both sides, or empty if routine
+	tension: string; // ALWAYS filled: either both sides of a debate, or "Routine — no real debate here."
 	topic: Topic;
 	interestLevel: 'high' | 'normal';
 }
@@ -156,7 +157,7 @@ export async function summarizeLegislation(matters: Array<{
 
 For each item return JSON with:
 - "summary": 1-2 sentences. What is this and why should someone care? Be concrete.
-- "tension": If there's a real debate, one sentence for each side: "Supporters say [X]. Opponents say [Y]." If it's routine/ceremonial, leave empty string.
+- "tension": ALWAYS fill this in. For debatable items: "Supporters say [specific argument]. Opponents say [specific argument]." Both sides usually have a point — help people see that. For routine/ceremonial items: "Routine city business — no real controversy here." or "This is procedural, not a policy debate." NEVER leave empty.
 - "statusExplained": 1 sentence explaining what the current status means in plain language.
 - "topics": 1-2 from: ${TOPICS.join(', ')}, Other
 - "interestLevel": "high" if contentious, big money, affects many people, or divisive. "normal" if routine.
@@ -234,15 +235,15 @@ export async function summarizeMeetingsWithAgenda(
 		const prompt = `These are upcoming Nashville Metro Council meetings with their agenda items.
 
 For each meeting, return:
-- "summary": 1-2 sentences. What is this body and what's the most important thing they're dealing with?
+- "summary": 1-2 sentences. What is this body and what's the most important thing they're dealing with? If it's a routine meeting with nothing controversial, say so: "Mostly routine business this time."
 - "issues": Array of the 2-4 most interesting/impactful agenda items. For each:
   - "title": Short plain-language title (not the bill number)
   - "summary": 1 sentence on what it is
-  - "tension": If there's a debate, "Supporters say [X]. Opponents say [Y]." Empty string if routine.
+  - "tension": ALWAYS fill this in. For debatable items: "Supporters say [specific argument]. Opponents say [specific argument]." Present both sides fairly — usually both have a point. For routine items: "Standard city business — not expected to be controversial." NEVER leave empty.
   - "topic": One of: ${TOPICS.join(', ')}, Other
   - "interestLevel": "high" or "normal"
 
-Skip purely procedural items (approving minutes, roll call). Focus on things people would actually disagree about or that affect their lives.
+Skip purely procedural items (approving minutes, roll call). Focus on things people would actually disagree about or that affect their lives. If a meeting is entirely routine, still include 1-2 items but mark them as normal interest.
 
 ${meetingDescriptions}
 
@@ -301,43 +302,70 @@ What are they focused on? What do their committee roles mean in practice? Keep i
 	return text;
 }
 
-// --- Weekly digest ---
+// --- Story cards for "This Week" carousel ---
 
-export async function generateWeeklyDigest(
+export interface StoryCard {
+	headline: string;
+	body: string;
+	tension: string;
+	topic: Topic;
+	interestLevel: 'high' | 'normal';
+	source: 'meeting' | 'legislation';
+	sourceDetail: string; // e.g. "Budget Committee — Tuesday" or "BL2026-1300"
+}
+
+export function generateStoryCards(
 	meetings: NarrativeMeeting[],
 	legislation: NarrativeLegislation[]
-): Promise<string> {
-	const highInterest = legislation.filter(l => l.interestLevel === 'high');
-	const topicGroups = new Map<string, number>();
-	for (const l of legislation) {
-		for (const t of l.topics) {
-			topicGroups.set(t, (topicGroups.get(t) || 0) + 1);
+): StoryCard[] {
+	const cards: StoryCard[] = [];
+
+	// Cards from meeting issues
+	for (const meeting of meetings) {
+		for (const issue of meeting.issues) {
+			const dateStr = new Date(meeting.date).toLocaleDateString('en-US', { weekday: 'long' });
+			cards.push({
+				headline: issue.title,
+				body: issue.summary,
+				tension: issue.tension,
+				topic: issue.topic,
+				interestLevel: issue.interestLevel,
+				source: 'meeting',
+				sourceDetail: `${meeting.body} — ${dateStr}`
+			});
 		}
 	}
 
-	const meetingSummaries = meetings.slice(0, 4).map(m => {
-		const issueList = m.issues.filter(i => i.interestLevel === 'high').map(i => i.title).join(', ');
-		return `- ${m.body} (${m.date}): ${m.summary}${issueList ? ` Hot issues: ${issueList}` : ''}`;
-	}).join('\n');
+	// Cards from high-interest legislation
+	for (const item of legislation) {
+		if (item.interestLevel === 'high' || item.tension) {
+			// Avoid duplicates — skip if we already have a meeting issue with similar content
+			const isDuplicate = cards.some(c =>
+				c.headline.toLowerCase().includes(item.title.toLowerCase().slice(0, 20)) ||
+				item.title.toLowerCase().includes(c.headline.toLowerCase().slice(0, 20))
+			);
+			if (!isDuplicate) {
+				cards.push({
+					headline: item.summary.split('.')[0] || item.title,
+					body: item.summary,
+					tension: item.tension,
+					topic: item.topics[0] || 'Other',
+					interestLevel: item.interestLevel,
+					source: 'legislation',
+					sourceDetail: item.fileNumber
+				});
+			}
+		}
+	}
 
-	const prompt = `Write a "This Week in Nashville" digest in 200 words or less.
+	// Sort: high-interest first
+	cards.sort((a, b) => {
+		if (a.interestLevel === 'high' && b.interestLevel !== 'high') return -1;
+		if (a.interestLevel !== 'high' && b.interestLevel === 'high') return 1;
+		return 0;
+	});
 
-Meetings this week:
-${meetingSummaries}
-
-${highInterest.length ? `High-interest legislation:\n${highInterest.map(l => `- ${l.summary}${l.tension ? ` ${l.tension}` : ''}`).join('\n')}` : ''}
-
-Active topics: ${[...topicGroups.entries()].sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} (${n})`).join(', ')}
-
-Lead with the most contentious or impactful thing happening. Use **bold** for emphasis. Be the friend who makes local politics interesting in under a minute of reading.`;
-
-	const key = cacheKey('digest', meetingSummaries);
-	const cached = getCached(key);
-	if (cached) return cached;
-
-	const text = await callClaude(prompt, 2048);
-	if (text) setCache(key, text);
-	return text;
+	return cards;
 }
 
 // --- Status explainer (no API call) ---
