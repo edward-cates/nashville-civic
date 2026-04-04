@@ -12,7 +12,7 @@ function getApiKey(): string | null {
 	return apiKey;
 }
 
-async function openStatesFetch<T>(endpoint: string, params?: Record<string, string>): Promise<T | null> {
+async function openStatesFetch<T>(endpoint: string, params?: Record<string, string>, multiParams?: Record<string, string[]>): Promise<T | null> {
 	const apiKey = getApiKey();
 	if (!apiKey) return null;
 
@@ -20,10 +20,15 @@ async function openStatesFetch<T>(endpoint: string, params?: Record<string, stri
 	if (params) {
 		for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 	}
+	if (multiParams) {
+		for (const [k, values] of Object.entries(multiParams)) {
+			for (const v of values) url.searchParams.append(k, v);
+		}
+	}
 
 	const res = await fetch(url.toString(), { headers: { 'X-API-KEY': apiKey } });
 	if (!res.ok) {
-		console.error(`Open States API error at ${endpoint}:`, res.status);
+		console.error(`Open States API error at ${endpoint}:`, res.status, await res.text().catch(() => ''));
 		return null;
 	}
 	return res.json();
@@ -100,8 +105,9 @@ export async function getRecentStateBills(limit = 20): Promise<StateBill[]> {
 	const data = await openStatesFetch<BillSearchResponse>('/bills', {
 		jurisdiction: 'Tennessee',
 		sort: 'updated_desc',
-		per_page: limit.toString(),
-		include: 'sponsorships,abstracts'
+		per_page: limit.toString()
+	}, {
+		include: ['sponsorships', 'abstracts']
 	});
 
 	return data?.results || [];
@@ -112,8 +118,9 @@ export async function searchStateBills(query: string, limit = 20): Promise<State
 		jurisdiction: 'Tennessee',
 		q: query,
 		sort: 'updated_desc',
-		per_page: limit.toString(),
-		include: 'sponsorships,abstracts'
+		per_page: limit.toString()
+	}, {
+		include: ['sponsorships', 'abstracts']
 	});
 
 	return data?.results || [];
