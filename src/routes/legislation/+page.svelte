@@ -118,14 +118,14 @@
 								{/if}
 							</div>
 
-							<!-- Official title -->
-							<h2 class="text-sm text-gray-500 mb-2 leading-relaxed">{bill.title}</h2>
-
-							<!-- AI Summary -->
+							<!-- Title / Summary -->
 							{#if bill.summary}
-								<div class="text-base text-gray-800 leading-relaxed mb-3 prose prose-sm max-w-none">
+								<div class="text-base text-gray-800 leading-relaxed mb-2 prose prose-sm max-w-none">
 									{@html renderMarkdown(bill.summary)}
 								</div>
+								<p class="text-sm text-gray-400 mb-2">{bill.title}</p>
+							{:else}
+								<h2 class="text-base text-gray-800 mb-2 leading-relaxed">{bill.title}</h2>
 							{/if}
 
 							<!-- Both sides -->
