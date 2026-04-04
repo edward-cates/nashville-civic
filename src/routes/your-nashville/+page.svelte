@@ -2,6 +2,7 @@
 	import AddressSearch from '$lib/components/AddressSearch.svelte';
 	import RepCard from '$lib/components/RepCard.svelte';
 	import { MapPin, Phone, Mail, Globe, Building2, Landmark, Users } from 'lucide-svelte';
+	import { renderMarkdown } from '$lib/markdown';
 
 	let { data } = $props();
 </script>
@@ -71,9 +72,9 @@
 					<p class="text-civic-300 mb-4">{data.localRep.office}</p>
 
 					{#if data.localRepNarrative}
-						<p class="text-civic-100 leading-relaxed mb-6 text-lg">
-							{data.localRepNarrative}
-						</p>
+						<div class="text-civic-100 leading-relaxed mb-6 text-lg prose prose-invert max-w-none">
+							{@html renderMarkdown(data.localRepNarrative)}
+						</div>
 					{:else}
 						<p class="text-civic-200 leading-relaxed mb-6">
 							This is the person who represents your specific neighborhood on Metro Council. They vote

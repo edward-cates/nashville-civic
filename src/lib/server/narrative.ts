@@ -73,18 +73,39 @@ async function generate(prompt: string, cachePrefix: string): Promise<string> {
 	}
 }
 
+// --- Topics ---
+
+export const TOPICS = [
+	'Housing & Development',
+	'Transit & Transportation',
+	'Public Safety & Policing',
+	'Budget & Taxes',
+	'Education & Schools',
+	'Parks & Public Spaces',
+	'Business & Permits',
+	'Civil Rights & Equity',
+	'Environment',
+	'Infrastructure',
+	'Government Operations',
+	'Other'
+] as const;
+
+export type Topic = typeof TOPICS[number];
+
 // --- Public functions ---
 
 export interface NarrativeLegislation {
 	id: number;
 	fileNumber: string;
 	title: string;
-	summary: string; // AI-generated plain-language summary
+	summary: string;
 	status: string;
-	statusExplained: string; // AI-generated status explanation
+	statusExplained: string;
 	type: string;
 	introDate: string;
 	sponsors: string;
+	topics: Topic[];
+	interestLevel: 'high' | 'normal'; // high = contentious, impactful, or divisive
 }
 
 export interface NarrativeMeeting {
@@ -120,16 +141,18 @@ export async function summarizeLegislation(matters: Array<{
 	const prompt = `Here are recent items from the Nashville Metro Council. For each one, write:
 1. A plain-language summary (1-2 sentences explaining what this is about and why someone might care)
 2. A plain-language status explanation (1 sentence explaining what the current status means)
+3. 1-2 topic tags from this list: ${TOPICS.join(', ')}
+4. An interest level: "high" if this is likely contentious, impacts many people, involves significant money, or touches on divisive issues (policing, housing, civil rights, big budget items). "normal" for routine items (honorary street names, minor permits, procedural stuff).
 
 Items:
 ${itemsList}
 
 Respond in JSON format as an array:
-[{"index": 1, "summary": "...", "statusExplained": "..."}, ...]
+[{"index": 1, "summary": "...", "statusExplained": "...", "topics": ["Housing & Development"], "interestLevel": "high"}, ...]
 
 Keep each summary under 100 words. If a title is too vague to summarize meaningfully, say what type of action it is in simple terms.`;
 
-	let summaries: Array<{ index: number; summary: string; statusExplained: string }> = [];
+	let summaries: Array<{ index: number; summary: string; statusExplained: string; topics?: string[]; interestLevel?: string }> = [];
 
 	if (client) {
 		const key = cacheKey('legislation', itemsList);
@@ -170,7 +193,9 @@ Keep each summary under 100 words. If a title is too vague to summarize meaningf
 			statusExplained: ai?.statusExplained || m.MatterStatusName,
 			type: m.MatterTypeName,
 			introDate: m.MatterIntroDate,
-			sponsors: m.MatterBodyName
+			sponsors: m.MatterBodyName,
+			topics: (ai?.topics || ['Other']) as Topic[],
+			interestLevel: (ai?.interestLevel === 'high' ? 'high' : 'normal') as 'high' | 'normal'
 		};
 	});
 }

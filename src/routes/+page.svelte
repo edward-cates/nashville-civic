@@ -1,6 +1,7 @@
 <script lang="ts">
 	import AddressSearch from '$lib/components/AddressSearch.svelte';
 	import { CalendarDays, FileText, Lightbulb, ArrowRight } from 'lucide-svelte';
+	import { renderMarkdown } from '$lib/markdown';
 
 	let { data } = $props();
 </script>
@@ -37,8 +38,8 @@
 		<div class="max-w-3xl mx-auto px-4 sm:px-6">
 			<h2 class="text-2xl sm:text-3xl font-bold text-civic-900 mb-6">This Week in Nashville</h2>
 			<div class="bg-white rounded-xl shadow-sm border border-civic-100 p-6 sm:p-8">
-				<div class="prose prose-lg prose-civic max-w-none text-gray-700 leading-relaxed whitespace-pre-line">
-					{data.weeklyDigest}
+				<div class="prose prose-lg prose-civic max-w-none text-gray-700 leading-relaxed">
+					{@html renderMarkdown(data.weeklyDigest)}
 				</div>
 			</div>
 		</div>
@@ -67,7 +68,7 @@
 							</time>
 						</div>
 						{#if meeting.summary}
-							<p class="text-gray-700 leading-relaxed mb-3">{meeting.summary}</p>
+							<div class="text-gray-700 leading-relaxed mb-3 prose prose-sm max-w-none">{@html renderMarkdown(meeting.summary)}</div>
 						{/if}
 						<div class="flex flex-wrap gap-3 text-sm">
 							{#if meeting.location}
@@ -113,14 +114,14 @@
 				{#each data.legislation as item}
 					<article class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
 						{#if item.summary}
-							<p class="text-gray-800 text-lg leading-relaxed mb-3">{item.summary}</p>
+							<div class="text-gray-800 text-lg leading-relaxed mb-3 prose prose-lg max-w-none">{@html renderMarkdown(item.summary)}</div>
 						{/if}
 						<div class="text-sm text-gray-500 space-y-1">
 							<p>
 								<span class="font-medium text-gray-600">{item.fileNumber}</span> &mdash; {item.title}
 							</p>
 							{#if item.statusExplained}
-								<p class="text-civic-700 font-medium">{item.statusExplained}</p>
+								<div class="text-civic-700 font-medium prose prose-sm max-w-none">{@html renderMarkdown(item.statusExplained)}</div>
 							{:else if item.status}
 								<p class="text-gray-600">Status: {item.status}</p>
 							{/if}
