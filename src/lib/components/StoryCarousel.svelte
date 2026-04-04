@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Flame, ChevronLeft, ChevronRight, CalendarDays, FileText, Pause, Play } from 'lucide-svelte';
+	import { Flame, CalendarDays, FileText, ArrowRight } from 'lucide-svelte';
 
 	interface StoryCard {
 		headline: string;
@@ -7,8 +7,11 @@
 		tension: string;
 		topic: string;
 		interestLevel: 'high' | 'normal';
+		controversyScore: number; // 1-10
 		source: 'meeting' | 'legislation';
 		sourceDetail: string;
+		link?: string;
+		linkLabel?: string;
 	}
 
 	interface Props {
@@ -17,100 +20,93 @@
 
 	let { cards }: Props = $props();
 
-	let current = $state(0);
-	let paused = $state(false);
-	let intervalId: ReturnType<typeof setInterval> | null = null;
-
-	function next() {
-		current = (current + 1) % cards.length;
+	// Controversy bar color
+	function barColor(score: number): string {
+		if (score >= 7) return 'bg-red-500';
+		if (score >= 4) return 'bg-amber-400';
+		return 'bg-gray-300';
 	}
-
-	function prev() {
-		current = (current - 1 + cards.length) % cards.length;
-	}
-
-	function goTo(index: number) {
-		current = index;
-	}
-
-	function togglePause() {
-		paused = !paused;
-	}
-
-	$effect(() => {
-		if (intervalId) clearInterval(intervalId);
-		if (!paused && cards.length > 1) {
-			intervalId = setInterval(next, 6000);
-		}
-		return () => {
-			if (intervalId) clearInterval(intervalId);
-		};
-	});
 </script>
 
 {#if cards.length > 0}
-	{@const card = cards[current]}
-	<div class="relative">
-		<div class="bg-white rounded-xl shadow-sm border {card.interestLevel === 'high' ? 'border-amber-200' : 'border-civic-100'} p-6 sm:p-8 min-h-[220px] flex flex-col justify-between">
-			<!-- Card content -->
-			<div>
-				<div class="flex items-center gap-2 mb-3">
-					{#if card.source === 'meeting'}
-						<CalendarDays class="h-4 w-4 text-civic-600 shrink-0" />
-					{:else}
-						<FileText class="h-4 w-4 text-civic-600 shrink-0" />
-					{/if}
-					<span class="text-xs text-gray-500">{card.sourceDetail}</span>
-					<span class="text-xs bg-civic-50 text-civic-600 rounded px-1.5 py-0.5">{card.topic}</span>
-					{#if card.interestLevel === 'high'}
-						<Flame class="h-4 w-4 text-amber-500 shrink-0" />
-					{/if}
-				</div>
+	<div class="relative -mx-4 sm:mx-0">
+		<div class="flex gap-4 overflow-x-auto px-4 sm:px-0 pb-4 snap-x snap-mandatory scrollbar-thin">
+			{#each cards as card}
+				<article
+					class="snap-start shrink-0 w-[85vw] sm:w-[340px] bg-white rounded-xl shadow-sm border {card.controversyScore >= 7 ? 'border-amber-200' : 'border-gray-100'} p-5 flex flex-col justify-between"
+				>
+					<div>
+						<!-- Header: source + topic + score -->
+						<div class="flex items-center gap-2 mb-3 flex-wrap">
+							{#if card.source === 'meeting'}
+								<CalendarDays class="h-3.5 w-3.5 text-civic-600 shrink-0" />
+							{:else}
+								<FileText class="h-3.5 w-3.5 text-civic-600 shrink-0" />
+							{/if}
+							<span class="text-xs text-gray-400 truncate max-w-[140px]">{card.sourceDetail}</span>
+							<span class="text-xs bg-civic-50 text-civic-600 rounded px-1.5 py-0.5 shrink-0">{card.topic}</span>
+						</div>
 
-				<h3 class="text-lg font-semibold text-gray-900 mb-2 leading-snug">{card.headline}</h3>
+						<!-- Headline -->
+						<h3 class="text-base font-semibold text-gray-900 mb-2 leading-snug line-clamp-2">{card.headline}</h3>
 
-				{#if card.body !== card.headline}
-					<p class="text-gray-700 leading-relaxed mb-3">{card.body}</p>
-				{/if}
-
-				{#if card.tension}
-					<p class="text-sm text-gray-600 italic leading-relaxed border-l-2 {card.interestLevel === 'high' ? 'border-amber-400' : 'border-gray-300'} pl-3">
-						{card.tension}
-					</p>
-				{/if}
-			</div>
-
-			<!-- Navigation -->
-			<div class="flex items-center justify-between mt-5 pt-4 border-t border-gray-100">
-				<div class="flex items-center gap-2">
-					<button onclick={prev} class="p-1.5 rounded-md hover:bg-gray-100 transition-colors text-gray-500" aria-label="Previous story">
-						<ChevronLeft class="h-4 w-4" />
-					</button>
-					<button onclick={togglePause} class="p-1.5 rounded-md hover:bg-gray-100 transition-colors text-gray-500" aria-label={paused ? 'Resume' : 'Pause'}>
-						{#if paused}
-							<Play class="h-4 w-4" />
-						{:else}
-							<Pause class="h-4 w-4" />
+						<!-- Body (only if different from headline) -->
+						{#if card.body && card.body !== card.headline}
+							<p class="text-sm text-gray-600 leading-relaxed mb-3 line-clamp-3">{card.body}</p>
 						{/if}
-					</button>
-					<button onclick={next} class="p-1.5 rounded-md hover:bg-gray-100 transition-colors text-gray-500" aria-label="Next story">
-						<ChevronRight class="h-4 w-4" />
-					</button>
-				</div>
 
-				<!-- Dots -->
-				<div class="flex items-center gap-1.5">
-					{#each cards as _, i}
-						<button
-							onclick={() => goTo(i)}
-							class="w-2 h-2 rounded-full transition-colors {i === current ? 'bg-civic-600' : 'bg-gray-300 hover:bg-gray-400'}"
-							aria-label="Go to story {i + 1}"
-						></button>
-					{/each}
-				</div>
+						<!-- Tension / Both sides -->
+						{#if card.tension}
+							<p class="text-sm text-gray-500 italic leading-relaxed border-l-2 {card.controversyScore >= 7 ? 'border-amber-400' : card.controversyScore >= 4 ? 'border-amber-300' : 'border-gray-200'} pl-2.5 line-clamp-3">
+								{card.tension}
+							</p>
+						{/if}
+					</div>
 
-				<span class="text-xs text-gray-400">{current + 1} / {cards.length}</span>
-			</div>
+					<!-- Footer: controversy bar + link -->
+					<div class="mt-4 pt-3 border-t border-gray-100 space-y-2.5">
+						<!-- Controversy score bar -->
+						<div class="flex items-center gap-2">
+							<span class="text-xs text-gray-400 shrink-0 w-20">Controversy</span>
+							<div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+								<div
+									class="{barColor(card.controversyScore)} h-full rounded-full transition-all"
+									style="width: {card.controversyScore * 10}%"
+								></div>
+							</div>
+							<span class="text-xs font-medium {card.controversyScore >= 7 ? 'text-red-600' : card.controversyScore >= 4 ? 'text-amber-600' : 'text-gray-400'} shrink-0">{card.controversyScore}/10</span>
+						</div>
+
+						<!-- Deep link -->
+						{#if card.link}
+							<a
+								href={card.link}
+								class="inline-flex items-center gap-1 text-sm font-medium text-civic-700 hover:text-civic-900 transition-colors"
+							>
+								{card.linkLabel || 'Go deeper'}
+								<ArrowRight class="h-3.5 w-3.5" />
+							</a>
+						{/if}
+					</div>
+				</article>
+			{/each}
 		</div>
 	</div>
 {/if}
+
+<style>
+	.scrollbar-thin {
+		scrollbar-width: thin;
+		scrollbar-color: #cbd5e1 transparent;
+	}
+	.scrollbar-thin::-webkit-scrollbar {
+		height: 6px;
+	}
+	.scrollbar-thin::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.scrollbar-thin::-webkit-scrollbar-thumb {
+		background: #cbd5e1;
+		border-radius: 3px;
+	}
+</style>

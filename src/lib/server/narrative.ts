@@ -103,6 +103,7 @@ export interface NarrativeLegislation {
 	sponsors: string;
 	topics: Topic[];
 	interestLevel: 'high' | 'normal';
+	controversyScore: number; // 1-10
 }
 
 export interface NarrativeMeeting {
@@ -123,6 +124,7 @@ export interface NarrativeMeetingIssue {
 	tension: string; // ALWAYS filled: either both sides of a debate, or "Routine — no real debate here."
 	topic: Topic;
 	interestLevel: 'high' | 'normal';
+	controversyScore: number; // 1-10
 }
 
 // --- Legislation ---
@@ -148,6 +150,7 @@ export async function summarizeLegislation(matters: Array<{
 	let results: Array<{
 		index: number; summary: string; tension: string;
 		statusExplained: string; topics: string[]; interestLevel: string;
+		controversyScore?: number;
 	}> = [];
 
 	if (cached) {
@@ -161,11 +164,12 @@ For each item return JSON with:
 - "statusExplained": 1 sentence explaining what the current status means in plain language.
 - "topics": 1-2 from: ${TOPICS.join(', ')}, Other
 - "interestLevel": "high" if contentious, big money, affects many people, or divisive. "normal" if routine.
+- "controversyScore": 1-10 integer. 1 = completely routine/ceremonial (naming a street, approving minutes). 5 = moderate debate (reasonable people disagree). 8-10 = deeply divisive (policing, housing equity, big tax/budget fights, civil rights). Be honest — most items are 1-3.
 
 Items:
 ${itemsList}
 
-Respond as JSON array: [{"index": 1, "summary": "...", "tension": "...", "statusExplained": "...", "topics": [...], "interestLevel": "high|normal"}, ...]`;
+Respond as JSON array: [{"index": 1, "summary": "...", "tension": "...", "statusExplained": "...", "topics": [...], "interestLevel": "high|normal", "controversyScore": 5}, ...]`;
 
 		const text = await callClaude(prompt);
 		results = extractJson(text) || [];
@@ -186,7 +190,8 @@ Respond as JSON array: [{"index": 1, "summary": "...", "tension": "...", "status
 			introDate: m.MatterIntroDate,
 			sponsors: m.MatterBodyName,
 			topics: (ai?.topics || ['Other']) as Topic[],
-			interestLevel: (ai?.interestLevel === 'high' ? 'high' : 'normal') as 'high' | 'normal'
+			interestLevel: (ai?.interestLevel === 'high' ? 'high' : 'normal') as 'high' | 'normal',
+			controversyScore: Math.max(1, Math.min(10, ai?.controversyScore || 1))
 		};
 	});
 }
@@ -226,7 +231,7 @@ export async function summarizeMeetingsWithAgenda(
 	const cached = getCached(key);
 	let results: Array<{
 		index: number; summary: string;
-		issues: Array<{ title: string; summary: string; tension: string; topic: string; interestLevel: string }>;
+		issues: Array<{ title: string; summary: string; tension: string; topic: string; interestLevel: string; controversyScore?: number }>;
 	}> = [];
 
 	if (cached) {
@@ -242,12 +247,13 @@ For each meeting, return:
   - "tension": ALWAYS fill this in. For debatable items: "Supporters say [specific argument]. Opponents say [specific argument]." Present both sides fairly — usually both have a point. For routine items: "Standard city business — not expected to be controversial." NEVER leave empty.
   - "topic": One of: ${TOPICS.join(', ')}, Other
   - "interestLevel": "high" or "normal"
+  - "controversyScore": 1-10 integer. 1 = routine. 5 = moderate debate. 8-10 = deeply divisive.
 
 Skip purely procedural items (approving minutes, roll call). Focus on things people would actually disagree about or that affect their lives. If a meeting is entirely routine, still include 1-2 items but mark them as normal interest.
 
 ${meetingDescriptions}
 
-Respond as JSON array: [{"index": 1, "summary": "...", "issues": [...]}, ...]`;
+Respond as JSON array: [{"index": 1, "summary": "...", "issues": [{"title":"...", "summary":"...", "tension":"...", "topic":"...", "interestLevel":"...", "controversyScore": 5}]}, ...]`;
 
 		const text = await callClaude(prompt);
 		results = extractJson(text) || [];
@@ -268,7 +274,8 @@ Respond as JSON array: [{"index": 1, "summary": "...", "issues": [...]}, ...]`;
 				summary: issue.summary,
 				tension: issue.tension || '',
 				topic: (issue.topic || 'Other') as Topic,
-				interestLevel: (issue.interestLevel === 'high' ? 'high' : 'normal') as 'high' | 'normal'
+				interestLevel: (issue.interestLevel === 'high' ? 'high' : 'normal') as 'high' | 'normal',
+				controversyScore: Math.max(1, Math.min(10, issue.controversyScore || 1))
 			})),
 			agendaUrl: e.EventAgendaFile || undefined,
 			videoUrl: e.EventVideoPath || e.EventInSiteURL || undefined
@@ -302,7 +309,7 @@ What are they focused on? What do their committee roles mean in practice? Keep i
 	return text;
 }
 
-// --- Story cards for "This Week" carousel ---
+// --- Story cards for horizontal scroll strip ---
 
 export interface StoryCard {
 	headline: string;
@@ -310,8 +317,11 @@ export interface StoryCard {
 	tension: string;
 	topic: Topic;
 	interestLevel: 'high' | 'normal';
+	controversyScore: number;
 	source: 'meeting' | 'legislation';
-	sourceDetail: string; // e.g. "Budget Committee — Tuesday" or "BL2026-1300"
+	sourceDetail: string;
+	link?: string;
+	linkLabel?: string;
 }
 
 export function generateStoryCards(
@@ -322,48 +332,49 @@ export function generateStoryCards(
 
 	// Cards from meeting issues
 	for (const meeting of meetings) {
+		const dateStr = new Date(meeting.date).toLocaleDateString('en-US', { weekday: 'long' });
 		for (const issue of meeting.issues) {
-			const dateStr = new Date(meeting.date).toLocaleDateString('en-US', { weekday: 'long' });
 			cards.push({
 				headline: issue.title,
 				body: issue.summary,
 				tension: issue.tension,
 				topic: issue.topic,
 				interestLevel: issue.interestLevel,
+				controversyScore: issue.controversyScore,
 				source: 'meeting',
-				sourceDetail: `${meeting.body} — ${dateStr}`
+				sourceDetail: `${meeting.body} — ${dateStr}`,
+				link: meeting.agendaUrl || '/whats-happening',
+				linkLabel: meeting.agendaUrl ? 'See agenda' : 'See meeting details'
 			});
 		}
 	}
 
-	// Cards from high-interest legislation
+	// Cards from legislation (skip duplicates already covered by meeting issues)
 	for (const item of legislation) {
-		if (item.interestLevel === 'high' || item.tension) {
-			// Avoid duplicates — skip if we already have a meeting issue with similar content
-			const isDuplicate = cards.some(c =>
-				c.headline.toLowerCase().includes(item.title.toLowerCase().slice(0, 20)) ||
-				item.title.toLowerCase().includes(c.headline.toLowerCase().slice(0, 20))
-			);
-			if (!isDuplicate) {
-				cards.push({
-					headline: item.summary.split('.')[0] || item.title,
-					body: item.summary,
-					tension: item.tension,
-					topic: item.topics[0] || 'Other',
-					interestLevel: item.interestLevel,
-					source: 'legislation',
-					sourceDetail: item.fileNumber
-				});
-			}
+		if (item.controversyScore <= 1 && item.interestLevel === 'normal') continue;
+
+		const isDuplicate = cards.some(c =>
+			c.headline.toLowerCase().includes(item.title.toLowerCase().slice(0, 20)) ||
+			item.title.toLowerCase().includes(c.headline.toLowerCase().slice(0, 20))
+		);
+		if (!isDuplicate) {
+			cards.push({
+				headline: item.summary.split('.')[0] || item.title,
+				body: item.summary,
+				tension: item.tension,
+				topic: item.topics[0] || 'Other',
+				interestLevel: item.interestLevel,
+				controversyScore: item.controversyScore,
+				source: 'legislation',
+				sourceDetail: item.fileNumber,
+				link: '/whats-happening',
+				linkLabel: 'See all legislation'
+			});
 		}
 	}
 
-	// Sort: high-interest first
-	cards.sort((a, b) => {
-		if (a.interestLevel === 'high' && b.interestLevel !== 'high') return -1;
-		if (a.interestLevel !== 'high' && b.interestLevel === 'high') return 1;
-		return 0;
-	});
+	// Sort by controversy score, descending
+	cards.sort((a, b) => b.controversyScore - a.controversyScore);
 
 	return cards;
 }

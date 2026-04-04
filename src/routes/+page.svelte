@@ -89,78 +89,6 @@
 	</section>
 {/if}
 
-<!-- Meetings This Week -->
-{#if data.meetings && data.meetings.length > 0}
-	<section class="py-12 sm:py-16">
-		<div class="max-w-3xl mx-auto px-4 sm:px-6">
-			<div class="flex items-center gap-3 mb-8">
-				<CalendarDays class="h-7 w-7 text-civic-700" />
-				<h2 class="text-2xl sm:text-3xl font-bold text-civic-900">Meetings This Week</h2>
-			</div>
-			<div class="space-y-6">
-				{#each data.meetings as meeting}
-					<article class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-						<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
-							<h3 class="text-lg font-semibold text-civic-800">{meeting.body}</h3>
-							<time class="text-sm text-gray-500">
-								{new Date(meeting.date).toLocaleDateString('en-US', {
-									weekday: 'long',
-									month: 'long',
-									day: 'numeric'
-								})} at {meeting.time}
-							</time>
-						</div>
-						{#if meeting.summary}
-							<p class="text-gray-600 text-sm mb-4">{meeting.summary}</p>
-						{/if}
-
-						<!-- Meeting Issues -->
-						{#if meeting.issues && meeting.issues.length > 0}
-							<div class="space-y-2 mb-4">
-								{#each meeting.issues as issue}
-									<div class="pl-3 border-l-2 {issue.interestLevel === 'high' ? 'border-amber-500' : 'border-gray-200'}">
-										<p class="text-sm font-semibold text-gray-800">{issue.title}</p>
-										<p class="text-sm text-gray-600 line-clamp-2">{issue.summary}</p>
-										{#if issue.tension}
-											<p class="text-sm italic text-gray-500 mt-0.5">{issue.tension}</p>
-										{/if}
-									</div>
-								{/each}
-							</div>
-						{/if}
-
-						<div class="flex flex-wrap gap-3 text-sm">
-							{#if meeting.location}
-								<span class="text-gray-500">{meeting.location}</span>
-							{/if}
-							{#if meeting.agendaUrl}
-								<a
-									href={meeting.agendaUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="text-civic-700 hover:text-civic-900 font-medium underline underline-offset-2"
-								>
-									View agenda
-								</a>
-							{/if}
-							{#if meeting.videoUrl}
-								<a
-									href={meeting.videoUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="text-civic-700 hover:text-civic-900 font-medium underline underline-offset-2"
-								>
-									Watch video
-								</a>
-							{/if}
-						</div>
-					</article>
-				{/each}
-			</div>
-		</div>
-	</section>
-{/if}
-
 <!-- By Topic -->
 {#if topicGroups.length > 0}
 	<section class="py-12 sm:py-16 bg-gray-50">
@@ -205,6 +133,69 @@
 							</div>
 						{/if}
 					</div>
+				{/each}
+			</div>
+		</div>
+	</section>
+{/if}
+
+<!-- Meetings This Week -->
+{#if data.meetings && data.meetings.length > 0}
+	<section class="py-12 sm:py-16">
+		<div class="max-w-3xl mx-auto px-4 sm:px-6">
+			<div class="flex items-center gap-3 mb-8">
+				<CalendarDays class="h-7 w-7 text-civic-700" />
+				<h2 class="text-2xl sm:text-3xl font-bold text-civic-900">Meetings This Week</h2>
+			</div>
+			<div class="space-y-6">
+				{#each data.meetings as meeting}
+					<article class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+						<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
+							<h3 class="text-lg font-semibold text-civic-800">{meeting.body}</h3>
+							<time class="text-sm text-gray-500">
+								{new Date(meeting.date).toLocaleDateString('en-US', {
+									weekday: 'long',
+									month: 'long',
+									day: 'numeric'
+								})} at {meeting.time}
+							</time>
+						</div>
+						{#if meeting.summary}
+							<p class="text-gray-600 text-sm mb-4">{meeting.summary}</p>
+						{/if}
+
+						{#if meeting.issues && meeting.issues.length > 0}
+							<div class="space-y-2 mb-4">
+								{#each meeting.issues as issue}
+									<div class="pl-3 border-l-2 {issue.interestLevel === 'high' ? 'border-amber-500' : 'border-gray-200'}">
+										<p class="text-sm font-semibold text-gray-800">{issue.title}</p>
+										<p class="text-sm text-gray-600 line-clamp-2">{issue.summary}</p>
+										{#if issue.tension}
+											<p class="text-sm italic text-gray-500 mt-0.5">{issue.tension}</p>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						{/if}
+
+						<div class="flex flex-wrap gap-3 text-sm">
+							{#if meeting.location}
+								<span class="text-gray-500">{meeting.location}</span>
+							{/if}
+							{#if meeting.agendaUrl}
+								<a href={meeting.agendaUrl} target="_blank" rel="noopener noreferrer"
+									class="text-civic-700 hover:text-civic-900 font-medium underline underline-offset-2">
+									View agenda
+								</a>
+							{/if}
+							{#if meeting.videoUrl}
+								<a href={meeting.videoUrl} target="_blank" rel="noopener noreferrer"
+									class="text-civic-700 hover:text-civic-900 font-medium underline underline-offset-2">
+									Watch video
+								</a>
+							{/if}
+						</div>
+					</article>
 				{/each}
 			</div>
 		</div>
