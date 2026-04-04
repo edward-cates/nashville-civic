@@ -9,7 +9,7 @@
 		e.preventDefault();
 		if (!address.trim()) return;
 		loading = true;
-		goto(`/representatives?address=${encodeURIComponent(address.trim())}`);
+		goto(`/your-nashville?address=${encodeURIComponent(address.trim())}`);
 	}
 </script>
 

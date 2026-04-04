@@ -8,8 +8,8 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
 	const [rawMeetings, rawLegislation] = await Promise.all([
-		getUpcomingMeetings(6),
-		getRecentLegislation(10)
+		getUpcomingMeetings(8),
+		getRecentLegislation(12)
 	]);
 
 	const [meetings, legislation, weeklyDigest] = await Promise.all([
