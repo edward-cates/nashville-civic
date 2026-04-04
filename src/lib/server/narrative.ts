@@ -1,8 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from '$env/dynamic/private';
+import { dbGet, dbSet } from './db';
 
-const CACHE = new Map<string, { text: string; expires: number }>();
-const INFLIGHT = new Map<string, Promise<string>>(); // dedup concurrent requests
+// L1: in-memory (fast, lost on restart)
+const L1 = new Map<string, { text: string; expires: number }>();
+const INFLIGHT = new Map<string, Promise<string>>();
 const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
 
 const SYSTEM_PROMPT = `You are writing for Nashville Civic, a local politics site. Explain Nashville government activity so a 15-year-old gets it.
@@ -34,31 +36,54 @@ function cacheKey(prefix: string, data: string): string {
 	return `${prefix}:${hash}`;
 }
 
-function getCached(key: string): string | null {
-	const entry = CACHE.get(key);
+// L1 check (sync, in-memory)
+function l1Get(key: string): string | null {
+	const entry = L1.get(key);
 	if (!entry) return null;
 	if (Date.now() > entry.expires) {
-		CACHE.delete(key);
+		L1.delete(key);
 		return null;
 	}
 	return entry.text;
 }
 
-function setCache(key: string, text: string): void {
-	CACHE.set(key, { text, expires: Date.now() + CACHE_TTL });
+function l1Set(key: string, text: string): void {
+	L1.set(key, { text, expires: Date.now() + CACHE_TTL });
+}
+
+// Two-tier cache read: L1 (memory) → L2 (Postgres)
+async function getCached(key: string): Promise<string | null> {
+	// L1
+	const mem = l1Get(key);
+	if (mem) return mem;
+
+	// L2 (Postgres)
+	const db = await dbGet(key);
+	if (db) {
+		l1Set(key, db); // promote to L1
+		return db;
+	}
+
+	return null;
+}
+
+// Write to both layers
+async function setCache(key: string, text: string): Promise<void> {
+	l1Set(key, text);
+	await dbSet(key, text, CACHE_TTL).catch(() => {}); // don't fail if DB is down
 }
 
 // Dedup: if the same key is already in-flight, return the same promise
 async function dedup<T>(key: string, fn: () => Promise<T>): Promise<T> {
-	const cached = getCached(key);
+	const cached = await getCached(key);
 	if (cached) return JSON.parse(cached);
 
 	const existing = INFLIGHT.get(key);
 	if (existing) return existing.then(t => JSON.parse(t));
 
-	const promise = fn().then(result => {
+	const promise = fn().then(async (result) => {
 		const text = JSON.stringify(result);
-		setCache(key, text);
+		await setCache(key, text);
 		INFLIGHT.delete(key);
 		return result;
 	}).catch(err => {
