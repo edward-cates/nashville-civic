@@ -1,9 +1,55 @@
 <script lang="ts">
 	import AddressSearch from '$lib/components/AddressSearch.svelte';
-	import { CalendarDays, FileText, Lightbulb, ArrowRight } from 'lucide-svelte';
+	import { CalendarDays, FileText, Lightbulb, ArrowRight, ChevronDown, ChevronRight, Flame, Tag } from 'lucide-svelte';
 	import { renderMarkdown } from '$lib/markdown';
 
 	let { data } = $props();
+
+	// Topic grouping for legislation
+	let topicGroups = $derived.by(() => {
+		if (!data.legislation || data.legislation.length === 0) return [];
+		const groups: Record<string, typeof data.legislation> = {};
+		for (const item of data.legislation) {
+			const topics = item.topics && item.topics.length > 0 ? item.topics : ['Other'];
+			for (const topic of topics) {
+				if (!groups[topic]) groups[topic] = [];
+				groups[topic].push(item);
+			}
+		}
+		// Sort items within each group: high-interest first
+		for (const topic of Object.keys(groups)) {
+			groups[topic].sort((a, b) => {
+				if (a.interestLevel === 'high' && b.interestLevel !== 'high') return -1;
+				if (a.interestLevel !== 'high' && b.interestLevel === 'high') return 1;
+				return 0;
+			});
+		}
+		// Sort topics: "Other" last, rest alphabetical
+		const sorted = Object.entries(groups).sort(([a], [b]) => {
+			if (a === 'Other') return 1;
+			if (b === 'Other') return -1;
+			return a.localeCompare(b);
+		});
+		return sorted;
+	});
+
+	// Track which topic sections are expanded
+	let expandedTopics = $state<Record<string, boolean>>({});
+
+	function toggleTopic(topic: string) {
+		expandedTopics[topic] = !expandedTopics[topic];
+	}
+
+	// Default: expand topics that have high-interest items
+	$effect(() => {
+		if (topicGroups.length > 0 && Object.keys(expandedTopics).length === 0) {
+			const initial: Record<string, boolean> = {};
+			for (const [topic, items] of topicGroups) {
+				initial[topic] = items.some(i => i.interestLevel === 'high');
+			}
+			expandedTopics = initial;
+		}
+	});
 </script>
 
 <svelte:head>
@@ -32,7 +78,7 @@
 	</div>
 </section>
 
-<!-- This Week Section -->
+<!-- Weekly Digest -->
 {#if data.weeklyDigest}
 	<section class="py-12 sm:py-16 bg-civic-50">
 		<div class="max-w-3xl mx-auto px-4 sm:px-6">
@@ -46,18 +92,18 @@
 	</section>
 {/if}
 
-<!-- Upcoming Meetings Section -->
+<!-- Meetings This Week -->
 {#if data.meetings && data.meetings.length > 0}
 	<section class="py-12 sm:py-16">
 		<div class="max-w-3xl mx-auto px-4 sm:px-6">
 			<div class="flex items-center gap-3 mb-8">
 				<CalendarDays class="h-7 w-7 text-civic-700" />
-				<h2 class="text-2xl sm:text-3xl font-bold text-civic-900">Upcoming Meetings</h2>
+				<h2 class="text-2xl sm:text-3xl font-bold text-civic-900">Meetings This Week</h2>
 			</div>
 			<div class="space-y-6">
 				{#each data.meetings as meeting}
 					<article class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-						<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-3">
+						<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
 							<h3 class="text-lg font-semibold text-civic-800">{meeting.body}</h3>
 							<time class="text-sm text-gray-500">
 								{new Date(meeting.date).toLocaleDateString('en-US', {
@@ -68,8 +114,24 @@
 							</time>
 						</div>
 						{#if meeting.summary}
-							<div class="text-gray-700 leading-relaxed mb-3 prose prose-sm max-w-none">{@html renderMarkdown(meeting.summary)}</div>
+							<p class="text-gray-600 text-sm mb-4">{meeting.summary}</p>
 						{/if}
+
+						<!-- Meeting Issues -->
+						{#if meeting.issues && meeting.issues.length > 0}
+							<div class="space-y-2 mb-4">
+								{#each meeting.issues as issue}
+									<div class="pl-3 border-l-2 {issue.interestLevel === 'high' ? 'border-amber-500' : 'border-gray-200'}">
+										<p class="text-sm font-semibold text-gray-800">{issue.title}</p>
+										<p class="text-sm text-gray-600 line-clamp-2">{issue.summary}</p>
+										{#if issue.tension}
+											<p class="text-sm italic text-gray-500 mt-0.5">{issue.tension}</p>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						{/if}
+
 						<div class="flex flex-wrap gap-3 text-sm">
 							{#if meeting.location}
 								<span class="text-gray-500">{meeting.location}</span>
@@ -102,41 +164,57 @@
 	</section>
 {/if}
 
-<!-- Recent Legislation Section -->
-{#if data.legislation && data.legislation.length > 0}
+<!-- By Topic -->
+{#if topicGroups.length > 0}
 	<section class="py-12 sm:py-16 bg-gray-50">
 		<div class="max-w-3xl mx-auto px-4 sm:px-6">
 			<div class="flex items-center gap-3 mb-8">
-				<FileText class="h-7 w-7 text-civic-700" />
-				<h2 class="text-2xl sm:text-3xl font-bold text-civic-900">Recent Legislation</h2>
+				<Tag class="h-7 w-7 text-civic-700" />
+				<h2 class="text-2xl sm:text-3xl font-bold text-civic-900">By Topic</h2>
 			</div>
-			<div class="space-y-6">
-				{#each data.legislation as item}
-					<article class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-						{#if item.summary}
-							<div class="text-gray-800 text-lg leading-relaxed mb-3 prose prose-lg max-w-none">{@html renderMarkdown(item.summary)}</div>
+			<div class="space-y-3">
+				{#each topicGroups as [topic, items]}
+					<div class="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+						<button
+							onclick={() => toggleTopic(topic)}
+							class="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors text-left"
+						>
+							<span class="flex items-center gap-2">
+								<span class="font-semibold text-civic-800">{topic}</span>
+								<span class="text-xs bg-civic-100 text-civic-700 rounded-full px-2 py-0.5 font-medium">{items.length}</span>
+								{#if items.some(i => i.interestLevel === 'high')}
+									<Flame class="h-4 w-4 text-amber-500" />
+								{/if}
+							</span>
+							{#if expandedTopics[topic]}
+								<ChevronDown class="h-5 w-5 text-gray-400" />
+							{:else}
+								<ChevronRight class="h-5 w-5 text-gray-400" />
+							{/if}
+						</button>
+						{#if expandedTopics[topic]}
+							<div class="border-t border-gray-100 px-5 py-3 space-y-3">
+								{#each items as item}
+									<div class="pl-3 border-l-2 {item.interestLevel === 'high' ? 'border-amber-500' : 'border-gray-200'}">
+										<div class="text-sm text-gray-800 leading-relaxed prose prose-sm max-w-none">{@html renderMarkdown(item.summary)}</div>
+										{#if item.tension}
+											<p class="text-sm italic text-gray-500 mt-1">{item.tension}</p>
+										{/if}
+										<p class="text-xs text-gray-400 mt-1">
+											{item.fileNumber} &middot; {item.status}
+										</p>
+									</div>
+								{/each}
+							</div>
 						{/if}
-						<div class="text-sm text-gray-500 space-y-1">
-							<p>
-								<span class="font-medium text-gray-600">{item.fileNumber}</span> &mdash; {item.title}
-							</p>
-							{#if item.statusExplained}
-								<div class="text-civic-700 font-medium prose prose-sm max-w-none">{@html renderMarkdown(item.statusExplained)}</div>
-							{:else if item.status}
-								<p class="text-gray-600">Status: {item.status}</p>
-							{/if}
-							{#if item.sponsors}
-								<p>Sponsored by: {item.sponsors}</p>
-							{/if}
-						</div>
-					</article>
+					</div>
 				{/each}
 			</div>
 		</div>
 	</section>
 {/if}
 
-<!-- Did You Know Section -->
+<!-- Did You Know -->
 <section class="py-12 sm:py-16">
 	<div class="max-w-3xl mx-auto px-4 sm:px-6">
 		<div class="flex items-center gap-3 mb-8">
@@ -153,12 +231,8 @@
 				"at-large" members who represent all of Nashville.
 			</p>
 			<p>
-				The mayor proposes the budget, but council has to approve it. That means your council member
-				has a direct say in how Nashville spends money on schools, parks, police, and more.
-			</p>
-			<p>
 				You can speak at most council and committee meetings. You get two minutes, and they actually
-				have to listen. Seriously.
+				have to listen.
 			</p>
 		</div>
 		<div class="mt-8">

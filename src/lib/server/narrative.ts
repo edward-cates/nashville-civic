@@ -4,18 +4,17 @@ import { env } from '$env/dynamic/private';
 const CACHE = new Map<string, { text: string; expires: number }>();
 const CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
 
-const SYSTEM_PROMPT = `You are writing for Nashville Civic, a local politics website. Your job is to explain Nashville government activity in plain language that a 15-year-old would understand.
+const SYSTEM_PROMPT = `You are writing for Nashville Civic, a local politics site. Explain Nashville government activity so a 15-year-old gets it.
 
 Rules:
-- Short sentences. Active voice.
-- No government jargon without explanation. "Ordinance" = "a new rule the council is voting on." "Resolution" = "a formal statement."
-- Lead with why someone should care, then give the details.
-- Never state opinions. Never say something is good or bad.
-- Never recommend how to vote or who to support.
-- If you don't know something, say so. Don't make things up.
-- Be specific: use names, places, dollar amounts, dates.
-- Be conversational. "Your council member voted yes" not "The representative cast an affirmative vote."
-- Explain procedural steps simply: "Bills need three votes to become law" not "pursuant to the Metro Charter, legislation requires passage on three readings."`;
+- Short sentences. Active voice. No filler.
+- No jargon without explanation.
+- Lead with why someone should care.
+- Never state opinions or recommend how to vote.
+- Be specific: names, places, dollar amounts.
+- When there's a disagreement, state BOTH sides neutrally in one sentence each. "Supporters say X. Opponents say Y."
+- Conversational tone. Not formal.
+- Be concise. Every word must earn its place.`;
 
 function getClient(): Anthropic | null {
 	const apiKey = env.ANTHROPIC_API_KEY;
@@ -24,7 +23,6 @@ function getClient(): Anthropic | null {
 }
 
 function cacheKey(prefix: string, data: string): string {
-	// Simple hash for cache key
 	let hash = 0;
 	for (let i = 0; i < data.length; i++) {
 		const char = data.charCodeAt(i);
@@ -48,29 +46,27 @@ function setCache(key: string, text: string): void {
 	CACHE.set(key, { text, expires: Date.now() + CACHE_TTL });
 }
 
-async function generate(prompt: string, cachePrefix: string): Promise<string> {
-	const key = cacheKey(cachePrefix, prompt);
-	const cached = getCached(key);
-	if (cached) return cached;
-
+async function callClaude(prompt: string, maxTokens = 4096): Promise<string> {
 	const client = getClient();
 	if (!client) return '';
-
 	try {
 		const response = await client.messages.create({
 			model: 'claude-haiku-4-5-20251001',
-			max_tokens: 1024,
+			max_tokens: maxTokens,
 			system: SYSTEM_PROMPT,
 			messages: [{ role: 'user', content: prompt }]
 		});
-
-		const text = response.content[0].type === 'text' ? response.content[0].text : '';
-		setCache(key, text);
-		return text;
+		return response.content[0].type === 'text' ? response.content[0].text : '';
 	} catch (err) {
 		console.error('Claude API error:', err);
 		return '';
 	}
+}
+
+function extractJson<T>(text: string): T | null {
+	const match = text.match(/\[[\s\S]*\]/);
+	if (!match) return null;
+	try { return JSON.parse(match[0]); } catch { return null; }
 }
 
 // --- Topics ---
@@ -78,34 +74,34 @@ async function generate(prompt: string, cachePrefix: string): Promise<string> {
 export const TOPICS = [
 	'Housing & Development',
 	'Transit & Transportation',
-	'Public Safety & Policing',
+	'Public Safety',
 	'Budget & Taxes',
-	'Education & Schools',
+	'Education',
 	'Parks & Public Spaces',
 	'Business & Permits',
 	'Civil Rights & Equity',
 	'Environment',
 	'Infrastructure',
-	'Government Operations',
-	'Other'
+	'Government Operations'
 ] as const;
 
-export type Topic = typeof TOPICS[number];
+export type Topic = typeof TOPICS[number] | 'Other';
 
-// --- Public functions ---
+// --- Public types ---
 
 export interface NarrativeLegislation {
 	id: number;
 	fileNumber: string;
 	title: string;
 	summary: string;
+	tension: string; // "Supporters say X. Opponents say Y." or empty if no real debate
 	status: string;
 	statusExplained: string;
 	type: string;
 	introDate: string;
 	sponsors: string;
 	topics: Topic[];
-	interestLevel: 'high' | 'normal'; // high = contentious, impactful, or divisive
+	interestLevel: 'high' | 'normal';
 }
 
 export interface NarrativeMeeting {
@@ -114,10 +110,21 @@ export interface NarrativeMeeting {
 	date: string;
 	time: string;
 	location: string;
-	summary: string; // AI-generated "what matters" summary
+	summary: string;
+	issues: NarrativeMeetingIssue[];
 	agendaUrl?: string;
 	videoUrl?: string;
 }
+
+export interface NarrativeMeetingIssue {
+	title: string;
+	summary: string;
+	tension: string; // both sides, or empty if routine
+	topic: Topic;
+	interestLevel: 'high' | 'normal';
+}
+
+// --- Legislation ---
 
 export async function summarizeLegislation(matters: Array<{
 	MatterId: number;
@@ -131,64 +138,47 @@ export async function summarizeLegislation(matters: Array<{
 }>): Promise<NarrativeLegislation[]> {
 	if (!matters.length) return [];
 
-	const client = getClient();
-
-	// Build batch prompt for efficiency
 	const itemsList = matters.map((m, i) =>
 		`${i + 1}. [${m.MatterFile}] "${m.MatterTitle || m.MatterName}" — Type: ${m.MatterTypeName}, Status: ${m.MatterStatusName}`
 	).join('\n');
 
-	const prompt = `Here are recent items from the Nashville Metro Council. For each one, write:
-1. A plain-language summary (1-2 sentences explaining what this is about and why someone might care)
-2. A plain-language status explanation (1 sentence explaining what the current status means)
-3. 1-2 topic tags from this list: ${TOPICS.join(', ')}
-4. An interest level: "high" if this is likely contentious, impacts many people, involves significant money, or touches on divisive issues (policing, housing, civil rights, big budget items). "normal" for routine items (honorary street names, minor permits, procedural stuff).
+	const key = cacheKey('leg', itemsList);
+	const cached = getCached(key);
+	let results: Array<{
+		index: number; summary: string; tension: string;
+		statusExplained: string; topics: string[]; interestLevel: string;
+	}> = [];
+
+	if (cached) {
+		results = JSON.parse(cached);
+	} else {
+		const prompt = `Classify and summarize these Nashville Metro Council items.
+
+For each item return JSON with:
+- "summary": 1-2 sentences. What is this and why should someone care? Be concrete.
+- "tension": If there's a real debate, one sentence for each side: "Supporters say [X]. Opponents say [Y]." If it's routine/ceremonial, leave empty string.
+- "statusExplained": 1 sentence explaining what the current status means in plain language.
+- "topics": 1-2 from: ${TOPICS.join(', ')}, Other
+- "interestLevel": "high" if contentious, big money, affects many people, or divisive. "normal" if routine.
 
 Items:
 ${itemsList}
 
-Respond in JSON format as an array:
-[{"index": 1, "summary": "...", "statusExplained": "...", "topics": ["Housing & Development"], "interestLevel": "high"}, ...]
+Respond as JSON array: [{"index": 1, "summary": "...", "tension": "...", "statusExplained": "...", "topics": [...], "interestLevel": "high|normal"}, ...]`;
 
-Keep each summary under 100 words. If a title is too vague to summarize meaningfully, say what type of action it is in simple terms.`;
-
-	let summaries: Array<{ index: number; summary: string; statusExplained: string; topics?: string[]; interestLevel?: string }> = [];
-
-	if (client) {
-		const key = cacheKey('legislation', itemsList);
-		const cached = getCached(key);
-
-		if (cached) {
-			try { summaries = JSON.parse(cached); } catch { /* use empty */ }
-		} else {
-			try {
-				const response = await client.messages.create({
-					model: 'claude-haiku-4-5-20251001',
-					max_tokens: 4096,
-					system: SYSTEM_PROMPT,
-					messages: [{ role: 'user', content: prompt }]
-				});
-
-				const text = response.content[0].type === 'text' ? response.content[0].text : '[]';
-				// Extract JSON from response (might be wrapped in markdown code block)
-				const jsonMatch = text.match(/\[[\s\S]*\]/);
-				if (jsonMatch) {
-					summaries = JSON.parse(jsonMatch[0]);
-					setCache(key, JSON.stringify(summaries));
-				}
-			} catch (err) {
-				console.error('Claude legislation summary error:', err);
-			}
-		}
+		const text = await callClaude(prompt);
+		results = extractJson(text) || [];
+		if (results.length) setCache(key, JSON.stringify(results));
 	}
 
 	return matters.map((m, i) => {
-		const ai = summaries.find(s => s.index === i + 1);
+		const ai = results.find(s => s.index === i + 1);
 		return {
 			id: m.MatterId,
 			fileNumber: m.MatterFile,
 			title: m.MatterTitle || m.MatterName,
 			summary: ai?.summary || '',
+			tension: ai?.tension || '',
 			status: m.MatterStatusName,
 			statusExplained: ai?.statusExplained || m.MatterStatusName,
 			type: m.MatterTypeName,
@@ -200,75 +190,92 @@ Keep each summary under 100 words. If a title is too vague to summarize meaningf
 	});
 }
 
-export async function summarizeMeetings(events: Array<{
-	EventId: number;
-	EventBodyName: string;
-	EventDate: string;
-	EventTime: string;
-	EventLocation: string;
-	EventAgendaFile: string;
-	EventVideoPath: string;
-	EventInSiteURL: string;
-}>): Promise<NarrativeMeeting[]> {
+// --- Meetings with agenda issues ---
+
+export async function summarizeMeetingsWithAgenda(
+	events: Array<{
+		EventId: number;
+		EventBodyName: string;
+		EventDate: string;
+		EventTime: string;
+		EventLocation: string;
+		EventAgendaFile: string;
+		EventVideoPath: string;
+		EventInSiteURL: string;
+	}>,
+	agendaItemsByEvent: Map<number, Array<{
+		EventItemMatterFile: string;
+		EventItemMatterName: string;
+		EventItemMatterType: string;
+		EventItemMatterStatus: string;
+	}>>
+): Promise<NarrativeMeeting[]> {
 	if (!events.length) return [];
 
-	const client = getClient();
-	const results: NarrativeMeeting[] = [];
+	// Build a combined prompt for all meetings with their agenda items
+	const meetingDescriptions = events.map((e, i) => {
+		const items = agendaItemsByEvent.get(e.EventId) || [];
+		const itemList = items.length
+			? items.map(item => `  - [${item.EventItemMatterFile}] "${item.EventItemMatterName}" (${item.EventItemMatterType}, ${item.EventItemMatterStatus})`).join('\n')
+			: '  (no agenda items available)';
+		return `Meeting ${i + 1}: ${e.EventBodyName} on ${e.EventDate} at ${e.EventTime}\nAgenda items:\n${itemList}`;
+	}).join('\n\n');
 
-	// For meetings, we generate a summary of what each body does (not agenda-specific yet)
-	const bodyNames = [...new Set(events.map(e => e.EventBodyName))];
-	const prompt = `These are Nashville Metro Council bodies that have meetings coming up:
-${bodyNames.map((b, i) => `${i + 1}. ${b}`).join('\n')}
+	const key = cacheKey('mtg', meetingDescriptions);
+	const cached = getCached(key);
+	let results: Array<{
+		index: number; summary: string;
+		issues: Array<{ title: string; summary: string; tension: string; topic: string; interestLevel: string }>;
+	}> = [];
 
-For each one, write a brief (1-2 sentence) explanation of what this body does and why a Nashville resident might care about their meetings. Respond in JSON format:
-[{"index": 1, "summary": "..."}, ...]`;
+	if (cached) {
+		results = JSON.parse(cached);
+	} else {
+		const prompt = `These are upcoming Nashville Metro Council meetings with their agenda items.
 
-	let bodySummaries: Array<{ index: number; summary: string }> = [];
+For each meeting, return:
+- "summary": 1-2 sentences. What is this body and what's the most important thing they're dealing with?
+- "issues": Array of the 2-4 most interesting/impactful agenda items. For each:
+  - "title": Short plain-language title (not the bill number)
+  - "summary": 1 sentence on what it is
+  - "tension": If there's a debate, "Supporters say [X]. Opponents say [Y]." Empty string if routine.
+  - "topic": One of: ${TOPICS.join(', ')}, Other
+  - "interestLevel": "high" or "normal"
 
-	if (client) {
-		const key = cacheKey('meetings', bodyNames.join(','));
-		const cached = getCached(key);
+Skip purely procedural items (approving minutes, roll call). Focus on things people would actually disagree about or that affect their lives.
 
-		if (cached) {
-			try { bodySummaries = JSON.parse(cached); } catch { /* use empty */ }
-		} else {
-			try {
-				const response = await client.messages.create({
-					model: 'claude-haiku-4-5-20251001',
-					max_tokens: 2048,
-					system: SYSTEM_PROMPT,
-					messages: [{ role: 'user', content: prompt }]
-				});
-				const text = response.content[0].type === 'text' ? response.content[0].text : '[]';
-				const jsonMatch = text.match(/\[[\s\S]*\]/);
-				if (jsonMatch) {
-					bodySummaries = JSON.parse(jsonMatch[0]);
-					setCache(key, JSON.stringify(bodySummaries));
-				}
-			} catch (err) {
-				console.error('Claude meeting summary error:', err);
-			}
-		}
+${meetingDescriptions}
+
+Respond as JSON array: [{"index": 1, "summary": "...", "issues": [...]}, ...]`;
+
+		const text = await callClaude(prompt);
+		results = extractJson(text) || [];
+		if (results.length) setCache(key, JSON.stringify(results));
 	}
 
-	for (const event of events) {
-		const bodyIndex = bodyNames.indexOf(event.EventBodyName);
-		const ai = bodySummaries.find(s => s.index === bodyIndex + 1);
-
-		results.push({
-			id: event.EventId,
-			body: event.EventBodyName,
-			date: event.EventDate,
-			time: event.EventTime,
-			location: event.EventLocation,
+	return events.map((e, i) => {
+		const ai = results.find(r => r.index === i + 1);
+		return {
+			id: e.EventId,
+			body: e.EventBodyName,
+			date: e.EventDate,
+			time: e.EventTime,
+			location: e.EventLocation,
 			summary: ai?.summary || '',
-			agendaUrl: event.EventAgendaFile || undefined,
-			videoUrl: event.EventVideoPath || event.EventInSiteURL || undefined
-		});
-	}
-
-	return results;
+			issues: (ai?.issues || []).map(issue => ({
+				title: issue.title,
+				summary: issue.summary,
+				tension: issue.tension || '',
+				topic: (issue.topic || 'Other') as Topic,
+				interestLevel: (issue.interestLevel === 'high' ? 'high' : 'normal') as 'high' | 'normal'
+			})),
+			agendaUrl: e.EventAgendaFile || undefined,
+			videoUrl: e.EventVideoPath || e.EventInSiteURL || undefined
+		};
+	});
 }
+
+// --- Rep activity ---
 
 export async function summarizeRepActivity(
 	repName: string,
@@ -278,55 +285,77 @@ export async function summarizeRepActivity(
 ): Promise<string> {
 	if (!recentMatters.length && !committees.length) return '';
 
-	const prompt = `Write a brief (3-5 sentence) narrative about what Nashville Metro Council member ${repName} (${office}) has been up to recently.
+	const dataStr = `${repName}|${committees.join(',')}|${recentMatters.map(m => m.MatterFile).join(',')}`;
+	const key = cacheKey('rep', dataStr);
+	const cached = getCached(key);
+	if (cached) return cached;
 
-${committees.length ? `They sit on these committees: ${committees.join(', ')}` : ''}
+	const prompt = `Write 3-4 sentences about Nashville Metro Council member ${repName} (${office}).
+${committees.length ? `Committees: ${committees.join(', ')}` : ''}
+${recentMatters.length ? `Recent legislation:\n${recentMatters.map(m => `- "${m.MatterTitle}" (${m.MatterStatusName})`).join('\n')}` : ''}
 
-${recentMatters.length ? `Recent legislation they've been involved with:
-${recentMatters.map(m => `- [${m.MatterFile}] "${m.MatterTitle}" (${m.MatterTypeName}, ${m.MatterStatusName})`).join('\n')}` : ''}
+What are they focused on? What do their committee roles mean in practice? Keep it concrete.`;
 
-Write it as a conversational summary — what are they focused on? What have they done lately? Explain committee roles in terms of what they actually control.`;
-
-	return generate(prompt, 'rep-activity');
+	const text = await callClaude(prompt, 1024);
+	if (text) setCache(key, text);
+	return text;
 }
+
+// --- Weekly digest ---
 
 export async function generateWeeklyDigest(
-	meetings: Array<{ EventBodyName: string; EventDate: string; EventTime: string }>,
-	legislation: Array<{ MatterFile: string; MatterTitle: string; MatterTypeName: string; MatterStatusName: string }>
+	meetings: NarrativeMeeting[],
+	legislation: NarrativeLegislation[]
 ): Promise<string> {
-	const prompt = `Write a "This Week in Nashville Politics" digest. Keep it conversational and engaging — like a friend telling you what's happening at city hall this week.
+	const highInterest = legislation.filter(l => l.interestLevel === 'high');
+	const topicGroups = new Map<string, number>();
+	for (const l of legislation) {
+		for (const t of l.topics) {
+			topicGroups.set(t, (topicGroups.get(t) || 0) + 1);
+		}
+	}
 
-Upcoming meetings this week:
-${meetings.map(m => `- ${m.EventBodyName} on ${m.EventDate} at ${m.EventTime}`).join('\n')}
+	const meetingSummaries = meetings.slice(0, 4).map(m => {
+		const issueList = m.issues.filter(i => i.interestLevel === 'high').map(i => i.title).join(', ');
+		return `- ${m.body} (${m.date}): ${m.summary}${issueList ? ` Hot issues: ${issueList}` : ''}`;
+	}).join('\n');
 
-Recent legislation activity:
-${legislation.map(m => `- [${m.MatterFile}] "${m.MatterTitle}" — ${m.MatterTypeName}, ${m.MatterStatusName}`).join('\n')}
+	const prompt = `Write a "This Week in Nashville" digest in 200 words or less.
 
-Structure it as:
-1. Lead with the most interesting/impactful thing happening this week (2-3 sentences)
-2. Other notable meetings coming up (brief)
-3. Bills to watch (the most interesting/impactful ones)
+Meetings this week:
+${meetingSummaries}
 
-Keep the whole thing under 300 words. Make someone who doesn't care about politics think "huh, that's actually interesting."`;
+${highInterest.length ? `High-interest legislation:\n${highInterest.map(l => `- ${l.summary}${l.tension ? ` ${l.tension}` : ''}`).join('\n')}` : ''}
 
-	return generate(prompt, 'weekly-digest');
+Active topics: ${[...topicGroups.entries()].sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} (${n})`).join(', ')}
+
+Lead with the most contentious or impactful thing happening. Use **bold** for emphasis. Be the friend who makes local politics interesting in under a minute of reading.`;
+
+	const key = cacheKey('digest', meetingSummaries);
+	const cached = getCached(key);
+	if (cached) return cached;
+
+	const text = await callClaude(prompt, 2048);
+	if (text) setCache(key, text);
+	return text;
 }
 
-export async function explainStatus(status: string): Promise<string> {
-	const commonStatuses: Record<string, string> = {
-		'Introduced': 'This was just proposed. It hasn\'t been voted on yet.',
-		'Passed on First Reading': 'It passed its first vote. Bills need three votes to become law in Nashville. Two more to go.',
-		'Referred': 'It got sent to a committee for review. The committee will study it and decide whether to recommend it to the full council.',
-		'Passed on Second Reading': 'It passed its second vote. One more vote and it becomes law.',
-		'Passed on Third Reading': 'It passed all three votes. It\'s now heading to the mayor\'s desk to be signed into law.',
-		'Approved': 'It\'s done. The mayor signed it and it\'s now law.',
-		'Filed': 'It was officially submitted but hasn\'t been acted on yet.',
-		'Withdrawn': 'The person who proposed it pulled it back. It\'s off the table.',
-		'Deferred': 'They decided to wait and deal with it later.',
-		'Substituted': 'The original version was replaced with a new version.',
-		'Amended': 'They changed some parts of it before voting.',
-		'Failed': 'It was voted down. It didn\'t pass.'
-	};
+// --- Status explainer (no API call) ---
 
-	return commonStatuses[status] || `Current status: ${status}`;
+export function explainStatus(status: string): string {
+	const map: Record<string, string> = {
+		'Introduced': 'Just proposed. No vote yet.',
+		'Passed on First Reading': 'Passed vote 1 of 3.',
+		'Referred': 'Sent to committee for review.',
+		'Passed on Second Reading': 'Passed vote 2 of 3. One more to go.',
+		'Passed on Third Reading': 'Passed all 3 votes. Heading to the mayor.',
+		'Approved': 'Signed into law.',
+		'Filed': 'Submitted, not yet acted on.',
+		'Withdrawn': 'Pulled back by the sponsor.',
+		'Deferred': 'Postponed to a later date.',
+		'Substituted': 'Replaced with a new version.',
+		'Amended': 'Modified before voting.',
+		'Failed': 'Voted down.'
+	};
+	return map[status] || status;
 }

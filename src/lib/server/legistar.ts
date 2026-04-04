@@ -100,3 +100,23 @@ export async function getRecentLegislation(limit = 20): Promise<LegistarMatter[]
 
 	return matters || [];
 }
+
+export interface LegistarEventItem {
+	EventItemId: number;
+	EventItemTitle: string;
+	EventItemMatterId: number;
+	EventItemMatterFile: string;
+	EventItemMatterName: string;
+	EventItemMatterType: string;
+	EventItemMatterStatus: string;
+	EventItemActionName: string;
+	EventItemRollCallFlag: number;
+}
+
+export async function getEventAgendaItems(eventId: number): Promise<LegistarEventItem[]> {
+	const items = await legistarFetch<LegistarEventItem[]>(
+		`/Events/${eventId}/EventItems`,
+		{ '$filter': 'EventItemMatterFile ne null' }
+	);
+	return items || [];
+}
