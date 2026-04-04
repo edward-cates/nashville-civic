@@ -1,8 +1,14 @@
 <script lang="ts">
 	import AddressSearch from '$lib/components/AddressSearch.svelte';
 	import RepCard from '$lib/components/RepCard.svelte';
-	import { MapPin, Phone, Mail, Globe, Building2, Landmark, Users } from 'lucide-svelte';
+	import { MapPin, Phone, Mail, Globe, Building2, Landmark, Users, FileText, Flame, ExternalLink, Briefcase } from 'lucide-svelte';
 	import { renderMarkdown } from '$lib/markdown';
+
+	function barColor(score: number): string {
+		if (score >= 7) return 'bg-red-500';
+		if (score >= 4) return 'bg-amber-400';
+		return 'bg-gray-300';
+	}
 
 	let { data } = $props();
 </script>
@@ -114,6 +120,81 @@
 							</a>
 						{/if}
 					</div>
+
+					<!-- Committees -->
+					{#if data.localRepCommittees && data.localRepCommittees.length > 0}
+						<div class="mt-6 pt-6 border-t border-civic-700">
+							<div class="flex items-center gap-2 mb-3">
+								<Briefcase class="h-4 w-4 text-civic-300" />
+								<h3 class="text-sm font-semibold text-civic-200 uppercase tracking-wider">Committee Seats</h3>
+							</div>
+							<p class="text-civic-300 text-sm mb-3">
+								Committees are where the real work happens. These are the topics your council member has direct influence over.
+							</p>
+							<div class="flex flex-wrap gap-2">
+								{#each data.localRepCommittees as committee}
+									<span class="text-sm bg-civic-700/60 text-civic-100 rounded-lg px-3 py-1.5">
+										{committee.name}
+										{#if committee.title !== 'Member'}
+											<span class="text-civic-400">· {committee.title}</span>
+										{/if}
+									</span>
+								{/each}
+							</div>
+						</div>
+					{/if}
+
+					<!-- Sponsored Bills -->
+					{#if data.localRepBills && data.localRepBills.length > 0}
+						<div class="mt-6 pt-6 border-t border-civic-700">
+							<div class="flex items-center gap-2 mb-3">
+								<FileText class="h-4 w-4 text-civic-300" />
+								<h3 class="text-sm font-semibold text-civic-200 uppercase tracking-wider">Bills They've Sponsored</h3>
+							</div>
+							<p class="text-civic-300 text-sm mb-4">
+								These are things your council member has personally proposed or co-sponsored. It tells you what they care about.
+							</p>
+							<div class="space-y-3">
+								{#each data.localRepBills as bill}
+									<div class="bg-civic-800/60 rounded-lg p-4 {bill.controversyScore >= 7 ? 'border border-amber-500/30' : ''}">
+										<div class="flex items-start justify-between gap-2 mb-1">
+											<div>
+												{#if bill.summary}
+													<p class="text-civic-50 text-sm leading-relaxed">{bill.summary}</p>
+												{:else}
+													<p class="text-civic-50 text-sm leading-relaxed">{bill.title}</p>
+												{/if}
+											</div>
+											{#if bill.controversyScore >= 7}
+												<Flame class="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+											{/if}
+										</div>
+										{#if bill.tension}
+											<p class="text-civic-300 text-xs italic mt-2 leading-relaxed border-l-2 border-civic-600 pl-2">{bill.tension}</p>
+										{/if}
+										<div class="flex items-center justify-between mt-2">
+											<span class="text-civic-400 text-xs">{bill.fileNumber} · {bill.status}</span>
+											{#if bill.controversyScore > 0}
+												<div class="flex items-center gap-1.5">
+													<div class="w-12 h-1 bg-civic-700 rounded-full overflow-hidden">
+														<div class="{barColor(bill.controversyScore)} h-full rounded-full" style="width: {bill.controversyScore * 10}%"></div>
+													</div>
+													<span class="text-xs text-civic-400">{bill.controversyScore}/10</span>
+												</div>
+											{/if}
+										</div>
+										<a href={bill.legistarUrl} target="_blank" rel="noopener noreferrer"
+											class="inline-flex items-center gap-1 text-xs text-civic-300 hover:text-civic-100 mt-1.5 transition-colors">
+											Official record <ExternalLink class="h-3 w-3" />
+										</a>
+									</div>
+								{/each}
+							</div>
+							<a href="/legislation" class="inline-block mt-4 text-sm text-civic-300 hover:text-white underline underline-offset-2 transition-colors">
+								See all Nashville legislation →
+							</a>
+						</div>
+					{/if}
 				</div>
 			{/if}
 

@@ -120,3 +120,53 @@ export async function getEventAgendaItems(eventId: number): Promise<LegistarEven
 	);
 	return items || [];
 }
+
+// --- Council member detail data ---
+
+export interface LegistarSponsor {
+	MatterSponsorNameId: number;
+	MatterSponsorName: string;
+	MatterSponsorMatterId: number;
+}
+
+export interface LegistarOfficeRecordDetail {
+	OfficeRecordId: number;
+	OfficeRecordFullName: string;
+	OfficeRecordTitle: string;
+	OfficeRecordBodyName: string;
+	OfficeRecordStartDate: string;
+	OfficeRecordEndDate: string;
+}
+
+export async function getPersonSponsored(personId: number, limit = 20): Promise<LegistarMatter[]> {
+	// Get matters sponsored by this person
+	const sponsors = await legistarFetch<LegistarSponsor[]>(
+		'/MatterSponsors',
+		{ '$filter': `MatterSponsorNameId eq ${personId}`, '$top': '50' }
+	);
+	if (!sponsors || !sponsors.length) return [];
+
+	// Fetch the matter details for each sponsored item (in parallel, limited)
+	const matterIds = sponsors.map(s => s.MatterSponsorMatterId).slice(0, limit);
+	const matters = await Promise.all(
+		matterIds.map(id => legistarFetch<LegistarMatter>(`/Matters/${id}`).catch(() => null))
+	);
+
+	return matters.filter((m): m is LegistarMatter => m !== null);
+}
+
+export async function getPersonCommittees(personId: number): Promise<LegistarOfficeRecordDetail[]> {
+	const records = await legistarFetch<LegistarOfficeRecordDetail[]>(
+		`/Persons/${personId}/OfficeRecords`,
+		{ '$filter': `OfficeRecordEndDate ge datetime'2026-01-01'` }
+	);
+	return records || [];
+}
+
+export async function getPersonByName(name: string): Promise<{ PersonId: number } | null> {
+	const persons = await legistarFetch<Array<{ PersonId: number; PersonFullName: string }>>(
+		'/Persons',
+		{ '$filter': `PersonFullName eq '${name}'`, '$top': '1' }
+	);
+	return persons?.[0] || null;
+}

@@ -5,18 +5,38 @@
 	let address = $state('');
 	let loading = $state(false);
 
+	const examples = [
+		'37203',
+		'37206',
+		'123 Broadway, Nashville',
+		'East Nashville',
+		'Germantown, Nashville TN'
+	];
+	let placeholderIdx = $state(0);
+
+	$effect(() => {
+		const interval = setInterval(() => {
+			placeholderIdx = (placeholderIdx + 1) % examples.length;
+		}, 3000);
+		return () => clearInterval(interval);
+	});
+
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 		if (!address.trim()) return;
 		loading = true;
-		goto(`/your-nashville?address=${encodeURIComponent(address.trim())}`);
+		// Append Nashville TN if it looks like just a zip or street
+		let query = address.trim();
+		if (/^\d{5}$/.test(query)) {
+			query = `${query} Nashville, TN`;
+		} else if (!query.toLowerCase().includes('nashville')) {
+			query = `${query}, Nashville, TN`;
+		}
+		goto(`/your-nashville?address=${encodeURIComponent(query)}`);
 	}
 </script>
 
 <form onsubmit={handleSubmit} class="w-full max-w-2xl mx-auto">
-	<label for="address-input" class="block text-sm font-medium text-gray-700 mb-2">
-		Enter your Nashville address
-	</label>
 	<div class="relative flex gap-2">
 		<div class="relative flex-1">
 			<MapPin class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -24,7 +44,7 @@
 				id="address-input"
 				type="text"
 				bind:value={address}
-				placeholder="123 Broadway, Nashville, TN"
+				placeholder={examples[placeholderIdx]}
 				class="w-full pl-11 pr-4 py-3 text-lg border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-civic-600 focus:border-transparent"
 				required
 			/>
@@ -39,6 +59,6 @@
 		</button>
 	</div>
 	<p class="mt-2 text-sm text-gray-500">
-		We use your address only to look up your representatives. Nothing is stored.
+		Try a zip code, street address, or neighborhood. We don't store anything.
 	</p>
 </form>
