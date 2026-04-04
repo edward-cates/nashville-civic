@@ -124,8 +124,8 @@
 							{:else if item.status}
 								<p class="text-gray-600">Status: {item.status}</p>
 							{/if}
-							{#if item.sponsors && item.sponsors.length > 0}
-								<p>Sponsored by: {item.sponsors.join(', ')}</p>
+							{#if item.sponsors}
+								<p>Sponsored by: {item.sponsors}</p>
 							{/if}
 						</div>
 					</article>
