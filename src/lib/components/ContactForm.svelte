@@ -6,9 +6,17 @@
 		representativeName: string;
 		representativeEmail: string;
 		representativeLevel: string;
+		initialSubject?: string;
+		initialMessage?: string;
 	}
 
-	let { representativeName, representativeEmail, representativeLevel }: Props = $props();
+	let {
+		representativeName,
+		representativeEmail,
+		representativeLevel,
+		initialSubject = '',
+		initialMessage = ''
+	}: Props = $props();
 
 	let status = $state<'idle' | 'sending' | 'sent' | 'error'>('idle');
 	let errorMessage = $state('');
@@ -99,6 +107,7 @@
 				name="subject"
 				type="text"
 				required
+				value={initialSubject}
 				class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-civic-600 focus:border-transparent"
 				placeholder="What's this about?"
 			/>
@@ -112,8 +121,7 @@
 				rows="6"
 				required
 				class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-civic-600 focus:border-transparent resize-y"
-				placeholder="Write your message to your representative..."
-			></textarea>
+				placeholder="Write your message to your representative...">{initialMessage}</textarea>
 		</div>
 
 		{#if status === 'error'}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Flame, CalendarDays, FileText, ArrowRight } from 'lucide-svelte';
+	import DraftEmailButton from './DraftEmailButton.svelte';
 
 	interface StoryCard {
 		headline: string;
@@ -87,6 +88,13 @@
 								<ArrowRight class="h-3.5 w-3.5" />
 							</a>
 						{/if}
+
+						<!-- Draft email to your rep -->
+						<DraftEmailButton
+							headline={card.headline}
+							topic={card.topic}
+							sourceDetail={card.sourceDetail}
+						/>
 					</div>
 				</article>
 			{/each}

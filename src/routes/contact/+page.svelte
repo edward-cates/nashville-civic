@@ -6,6 +6,8 @@
 	const repName = page.url.searchParams.get('rep') || '';
 	const repEmail = page.url.searchParams.get('email') || '';
 	const repLevel = page.url.searchParams.get('level') || 'local';
+	const initialSubject = page.url.searchParams.get('subject') || '';
+	const initialMessage = page.url.searchParams.get('body') || '';
 
 	let templatesOpen = $state(false);
 	let expandedTemplate = $state<number | null>(null);
@@ -191,6 +193,8 @@ Thank you for considering my perspective. I'll be following this closely.`
 				representativeName={repName}
 				representativeEmail={repEmail}
 				representativeLevel={repLevel}
+				{initialSubject}
+				{initialMessage}
 			/>
 		</div>
 	{:else}
