@@ -44,6 +44,7 @@ interface OpenStatesPerson {
 		district: string;
 		org_classification: string;
 	};
+	jurisdiction?: { classification?: string };
 	email?: string;
 	image?: string;
 	links?: { url: string }[];
@@ -51,15 +52,18 @@ interface OpenStatesPerson {
 }
 
 export async function getStateLegislators(lat: number, lng: number): Promise<Representative[]> {
-	const data = await openStatesFetch<{ results: OpenStatesPerson[] }>('/people.geo', {
-		lat: lat.toString(),
-		lng: lng.toString(),
-		include: 'links,offices'
-	});
+	const data = await openStatesFetch<{ results: OpenStatesPerson[] }>(
+		'/people.geo',
+		{ lat: lat.toString(), lng: lng.toString() },
+		{ include: ['links', 'offices'] }
+	);
 
 	if (!data?.results) return [];
 
-	return data.results.map((person) => ({
+	// /people.geo also returns federal reps whose district overlaps — filter to state only.
+	const stateOnly = data.results.filter(p => p.jurisdiction?.classification === 'state');
+
+	return stateOnly.map((person) => ({
 		name: person.name,
 		office: `TN ${person.current_role.org_classification === 'upper' ? 'State Senator' : 'State Representative'}`,
 		level: 'state' as const,
