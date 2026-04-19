@@ -1,6 +1,10 @@
 import { json, type RequestEvent } from '@sveltejs/kit';
 import { geocodeAddress } from '$lib/server/geocode';
 import { findDistrict } from '$lib/server/districts';
+import { getStateLegislators } from '$lib/server/openstates';
+import type { Representative } from '$lib/types';
+
+type Rep = { name: string; email: string; level: 'local' | 'state'; office?: string };
 
 export const GET = async ({ url }: RequestEvent) => {
 	const address = url.searchParams.get('address')?.trim();
@@ -17,28 +21,21 @@ export const GET = async ({ url }: RequestEvent) => {
 	}
 
 	const districtResult = findDistrict(geo.lat, geo.lng);
-	const rep = districtResult?.representative;
+	const localRep = districtResult?.representative;
 
-	if (!rep) {
-		return json(
-			{ error: "We couldn't find a Metro Council district for that address." },
-			{ status: 404 }
-		);
-	}
+	const stateReps: Representative[] = await getStateLegislators(geo.lat, geo.lng).catch(() => []);
 
-	if (!rep.email) {
-		return json(
-			{
-				error: `We found your council member (${rep.name}) but don't have an email on file.`,
-				district: districtResult?.district,
-				rep: { name: rep.name, email: '', level: rep.level }
-			},
-			{ status: 422 }
-		);
-	}
+	const local: Rep | null = localRep?.email
+		? { name: localRep.name, email: localRep.email, level: 'local', office: localRep.office }
+		: null;
+
+	const state: Rep[] = stateReps
+		.filter(r => !!r.email)
+		.map(r => ({ name: r.name, email: r.email as string, level: 'state', office: r.office }));
 
 	return json({
 		district: districtResult?.district,
-		rep: { name: rep.name, email: rep.email, level: rep.level }
+		local,
+		state
 	});
 };

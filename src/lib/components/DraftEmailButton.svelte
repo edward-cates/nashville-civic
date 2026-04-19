@@ -5,9 +5,12 @@
 		headline: string;
 		topic: string;
 		sourceDetail: string;
+		level: 'local' | 'state';
 	}
 
-	let { headline, topic, sourceDetail }: Props = $props();
+	let { headline, topic, sourceDetail, level }: Props = $props();
+
+	type Rep = { name: string; email: string; level: 'local' | 'state'; office?: string };
 
 	let open = $state(false);
 	let address = $state('');
@@ -25,8 +28,13 @@
 		return `Regarding ${topic}: ${headline}`;
 	}
 
-	function buildBody(repName: string): string {
-		return `Hi ${repName},
+	function buildBody(recipients: Rep[]): string {
+		const salutation =
+			recipients.length === 1
+				? recipients[0].name
+				: recipients.map(r => r.name).join(' and ');
+
+		return `Hi ${salutation},
 
 I'm a constituent writing about ${headline} (${sourceDetail}). I wanted to share my perspective on this.
 
@@ -47,13 +55,26 @@ Thank you for your time.`;
 			const res = await fetch(`/api/find-local-rep?address=${encodeURIComponent(query)}`);
 			const data = await res.json();
 
-			if (!res.ok || !data.rep?.email) {
-				error = data.error || 'Could not find your council member.';
+			if (!res.ok) {
+				error = data.error || 'Could not find your representatives.';
 				loading = false;
 				return;
 			}
 
-			const mailto = `mailto:${encodeURIComponent(data.rep.email)}?subject=${encodeURIComponent(buildSubject())}&body=${encodeURIComponent(buildBody(data.rep.name))}`;
+			const recipients: Rep[] =
+				level === 'state' ? (data.state || []) : data.local ? [data.local] : [];
+
+			if (recipients.length === 0) {
+				error =
+					level === 'state'
+						? "We couldn't find state legislators with an email on file for that address."
+						: "We couldn't find your council member's email.";
+				loading = false;
+				return;
+			}
+
+			const to = recipients.map(r => r.email).join(',');
+			const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(buildSubject())}&body=${encodeURIComponent(buildBody(recipients))}`;
 			window.location.href = mailto;
 			loading = false;
 			open = false;
@@ -87,7 +108,7 @@ Thank you for your time.`;
 			>
 				{#if loading}
 					<Loader2 class="h-4 w-4 animate-spin" />
-					Finding rep…
+					Finding {level === 'state' ? 'legislators' : 'rep'}…
 				{:else}
 					Draft email
 				{/if}
@@ -114,6 +135,6 @@ Thank you for your time.`;
 		class="inline-flex items-center gap-1.5 text-sm font-medium text-civic-700 hover:text-civic-900 transition-colors"
 	>
 		<Mail class="h-3.5 w-3.5" />
-		Email your rep
+		Email your {level === 'state' ? 'state legislators' : 'rep'}
 	</button>
 {/if}

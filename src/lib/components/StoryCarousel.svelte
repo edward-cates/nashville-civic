@@ -11,6 +11,7 @@
 		controversyScore: number; // 1-10
 		source: 'meeting' | 'legislation';
 		sourceDetail: string;
+		level: 'local' | 'state';
 		link?: string;
 		linkLabel?: string;
 	}
@@ -94,6 +95,7 @@
 							headline={card.headline}
 							topic={card.topic}
 							sourceDetail={card.sourceDetail}
+							level={card.level || 'local'}
 						/>
 					</div>
 				</article>

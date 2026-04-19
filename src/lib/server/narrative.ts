@@ -485,6 +485,7 @@ export interface StoryCard {
 	controversyScore: number;
 	source: 'meeting' | 'legislation';
 	sourceDetail: string;
+	level: 'local' | 'state'; // which government level — decides who to email
 	link?: string;
 	linkLabel?: string;
 }
@@ -508,6 +509,7 @@ export function generateStoryCards(
 				controversyScore: issue.controversyScore,
 				source: 'meeting',
 				sourceDetail: `${meeting.body} — ${dateStr}`,
+				level: 'local',
 				link: meeting.agendaUrl || '/whats-happening',
 				linkLabel: meeting.agendaUrl ? 'See agenda' : 'See meeting details'
 			});
@@ -532,6 +534,7 @@ export function generateStoryCards(
 				controversyScore: item.controversyScore,
 				source: 'legislation',
 				sourceDetail: item.fileNumber,
+				level: item.level,
 				link: '/legislation',
 				linkLabel: 'See all bills'
 			});
