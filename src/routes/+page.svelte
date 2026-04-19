@@ -1,12 +1,20 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import AddressSearch from '$lib/components/AddressSearch.svelte';
 	import StoryCarousel from '$lib/components/StoryCarousel.svelte';
 	import TopicList from '$lib/components/TopicList.svelte';
 	import LoadingPulse from '$lib/components/LoadingPulse.svelte';
 	import { CalendarDays, Lightbulb, ArrowRight } from 'lucide-svelte';
 
-	let homeData: Promise<{ meetings: any[]; legislation: any[]; storyCards: any[] }> =
-		$state(fetch('/api/home').then(r => r.json()));
+	// Initialize to a never-resolving promise so the SSR render shows the loading skeleton;
+	// replace with the real fetch once we're in the browser (relative URLs can't be fetched during SSR).
+	let homeData = $state<Promise<{ meetings: any[]; legislation: any[]; storyCards: any[] }>>(
+		new Promise(() => {})
+	);
+
+	onMount(() => {
+		homeData = fetch('/api/home').then(r => r.json());
+	});
 </script>
 
 <svelte:head>
