@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Mail, MapPin, Loader2, AlertCircle } from 'lucide-svelte';
+	import { Mail, MapPin, Loader2, AlertCircle, X } from 'lucide-svelte';
 
 	interface Props {
 		headline: string;
@@ -11,11 +11,18 @@
 	let { headline, topic, sourceDetail, level }: Props = $props();
 
 	type Rep = { name: string; email: string; level: 'local' | 'state'; office?: string };
+	type Suggestion = { displayName: string; lat: number; lng: number };
 
 	let open = $state(false);
 	let address = $state('');
 	let loading = $state(false);
 	let error = $state('');
+
+	let suggestions = $state<Suggestion[]>([]);
+	let showSuggestions = $state(false);
+	let activeSuggestion = $state(-1);
+	let suggestTimer: ReturnType<typeof setTimeout> | null = null;
+	let lastQueried = '';
 
 	function normalizeAddress(raw: string): string {
 		const q = raw.trim();
@@ -43,12 +50,61 @@ I'm a constituent writing about ${headline} (${sourceDetail}). I wanted to share
 Thank you for your time.`;
 	}
 
+	function scheduleSuggest(raw: string) {
+		if (suggestTimer) clearTimeout(suggestTimer);
+		const q = raw.trim();
+		if (q.length < 3) {
+			suggestions = [];
+			showSuggestions = false;
+			return;
+		}
+		if (q === lastQueried) return;
+		suggestTimer = setTimeout(() => fetchSuggestions(q), 500);
+	}
+
+	async function fetchSuggestions(q: string) {
+		lastQueried = q;
+		try {
+			const res = await fetch(`/api/address-suggest?q=${encodeURIComponent(q)}`);
+			const data = await res.json();
+			suggestions = data.suggestions || [];
+			showSuggestions = suggestions.length > 0;
+			activeSuggestion = -1;
+		} catch {
+			// silent — autocomplete is a nice-to-have
+		}
+	}
+
+	function pickSuggestion(s: Suggestion) {
+		address = s.displayName;
+		showSuggestions = false;
+		suggestions = [];
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (!showSuggestions || suggestions.length === 0) return;
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			activeSuggestion = (activeSuggestion + 1) % suggestions.length;
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			activeSuggestion =
+				activeSuggestion <= 0 ? suggestions.length - 1 : activeSuggestion - 1;
+		} else if (e.key === 'Enter' && activeSuggestion >= 0) {
+			e.preventDefault();
+			pickSuggestion(suggestions[activeSuggestion]);
+		} else if (e.key === 'Escape') {
+			showSuggestions = false;
+		}
+	}
+
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 		if (!address.trim() || loading) return;
 
 		loading = true;
 		error = '';
+		showSuggestions = false;
 
 		try {
 			const query = normalizeAddress(address);
@@ -84,25 +140,53 @@ Thank you for your time.`;
 			loading = false;
 		}
 	}
+
+	function closeForm() {
+		open = false;
+		error = '';
+		showSuggestions = false;
+	}
 </script>
 
 {#if open}
 	<form onsubmit={handleSubmit} class="mt-2 space-y-2">
 		<div class="relative">
-			<MapPin class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-			<!-- svelte-ignore a11y_autofocus -->
-			<input
-				type="text"
-				bind:value={address}
-				placeholder="Your street address (e.g., 123 Main St, 37205)"
-				class="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-civic-600 focus:border-transparent"
-				required
-				autofocus
-			/>
-			<p class="mt-1 text-xs text-gray-500">
-				Street address is best — zip alone can span multiple legislative districts.
-			</p>
+			<div class="relative">
+				<MapPin class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+				<!-- svelte-ignore a11y_autofocus -->
+				<input
+					type="text"
+					bind:value={address}
+					oninput={() => scheduleSuggest(address)}
+					onkeydown={handleKeydown}
+					onblur={() => setTimeout(() => (showSuggestions = false), 150)}
+					onfocus={() => { if (suggestions.length > 0) showSuggestions = true; }}
+					placeholder="Your street address (e.g., 123 Main St)"
+					autocomplete="street-address"
+					class="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-civic-600 focus:border-transparent"
+					required
+					autofocus
+				/>
+			</div>
+			{#if showSuggestions}
+				<ul class="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-md max-h-60 overflow-y-auto z-10">
+					{#each suggestions as s, i}
+						<li>
+							<button
+								type="button"
+								onmousedown={(e) => { e.preventDefault(); pickSuggestion(s); }}
+								class="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 {i === activeSuggestion ? 'bg-gray-50' : ''}"
+							>
+								{s.displayName}
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		</div>
+		<p class="text-xs text-gray-500">
+			Street address is best — zip alone can span multiple legislative districts.
+		</p>
 		<div class="flex gap-2">
 			<button
 				type="submit"
@@ -118,10 +202,11 @@ Thank you for your time.`;
 			</button>
 			<button
 				type="button"
-				onclick={() => { open = false; error = ''; }}
-				class="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 transition-colors"
+				onclick={closeForm}
+				aria-label="Cancel"
+				class="px-2 py-2 text-gray-500 hover:text-gray-700 transition-colors"
 			>
-				Cancel
+				<X class="h-4 w-4" />
 			</button>
 		</div>
 		{#if error}
