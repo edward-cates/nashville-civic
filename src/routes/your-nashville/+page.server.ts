@@ -1,6 +1,6 @@
 import { geocodeAddress } from '$lib/server/geocode';
 import { getRepresentatives } from '$lib/server/civic';
-import { getStateLegislators, searchStateBills } from '$lib/server/openstates';
+import { getAllLegislators, searchStateBills } from '$lib/server/openstates';
 import { findDistrict } from '$lib/server/districts';
 import { getPersonByName, getPersonSponsored, getPersonCommittees, getCouncilMembers } from '$lib/server/legistar';
 import { summarizeLegislation, summarizeStateBills, summarizeRepActivity } from '$lib/server/narrative';
@@ -76,10 +76,14 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const districtResult = findDistrict(geo.lat, geo.lng);
 
-	const [civicReps, stateReps] = await Promise.all([
+	const [civicReps, openStatesReps] = await Promise.all([
 		getRepresentatives(address).catch(() => [] as Representative[]),
-		getStateLegislators(geo.lat, geo.lng).catch(() => [] as Representative[])
+		getAllLegislators(geo.lat, geo.lng).catch(() => ({
+			state: [] as Representative[],
+			federal: [] as Representative[]
+		}))
 	]);
+	const stateReps = openStatesReps.state;
 
 	const localRep = districtResult?.representative || null;
 
@@ -187,7 +191,10 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	// Add governor to state reps list
 	const allStateReps = [governor, ...finalStateReps];
-	const federalReps = civicReps.filter(r => r.level === 'federal');
+
+	// Federal reps: prefer Google Civic (has photos + channels), fall back to OpenStates.
+	const civicFederal = civicReps.filter(r => r.level === 'federal');
+	const federalReps = civicFederal.length > 0 ? civicFederal : openStatesReps.federal;
 
 	return {
 		address,

@@ -94,11 +94,14 @@ Thank you for your time.`;
 			<input
 				type="text"
 				bind:value={address}
-				placeholder="Your zip code (e.g., 37203)"
+				placeholder="Your street address (e.g., 123 Main St, 37205)"
 				class="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-civic-600 focus:border-transparent"
 				required
 				autofocus
 			/>
+			<p class="mt-1 text-xs text-gray-500">
+				Street address is best — zip alone can span multiple legislative districts.
+			</p>
 		</div>
 		<div class="flex gap-2">
 			<button

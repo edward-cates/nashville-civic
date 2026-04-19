@@ -51,22 +51,20 @@ interface OpenStatesPerson {
 	offices?: { voice?: string; address?: string }[];
 }
 
-export async function getStateLegislators(lat: number, lng: number): Promise<Representative[]> {
+async function fetchPeopleGeo(lat: number, lng: number): Promise<OpenStatesPerson[]> {
 	const data = await openStatesFetch<{ results: OpenStatesPerson[] }>(
 		'/people.geo',
 		{ lat: lat.toString(), lng: lng.toString() },
 		{ include: ['links', 'offices'] }
 	);
+	return data?.results || [];
+}
 
-	if (!data?.results) return [];
-
-	// /people.geo also returns federal reps whose district overlaps — filter to state only.
-	const stateOnly = data.results.filter(p => p.jurisdiction?.classification === 'state');
-
-	return stateOnly.map((person) => ({
+function toStateRep(person: OpenStatesPerson): Representative {
+	return {
 		name: person.name,
 		office: `TN ${person.current_role.org_classification === 'upper' ? 'State Senator' : 'State Representative'}`,
-		level: 'state' as const,
+		level: 'state',
 		party: person.party || undefined,
 		district: person.current_role.district || undefined,
 		email: person.email || undefined,
@@ -74,7 +72,50 @@ export async function getStateLegislators(lat: number, lng: number): Promise<Rep
 		website: person.links?.[0]?.url || undefined,
 		phone: person.offices?.[0]?.voice || undefined,
 		address: person.offices?.[0]?.address || undefined
-	}));
+	};
+}
+
+function toFederalRep(person: OpenStatesPerson): Representative {
+	return {
+		name: person.name,
+		office:
+			person.current_role.org_classification === 'upper'
+				? 'U.S. Senator'
+				: `U.S. Representative — District ${person.current_role.district}`,
+		level: 'federal',
+		party: person.party || undefined,
+		district: person.current_role.district || undefined,
+		// OpenStates stores federal "emails" as contact-form URLs — expose as website, not email.
+		email: person.email && !person.email.startsWith('http') ? person.email : undefined,
+		website:
+			person.email && person.email.startsWith('http')
+				? person.email
+				: person.links?.[0]?.url || undefined,
+		photoUrl: person.image || undefined,
+		phone: person.offices?.[0]?.voice || undefined,
+		address: person.offices?.[0]?.address || undefined
+	};
+}
+
+export async function getStateLegislators(lat: number, lng: number): Promise<Representative[]> {
+	const people = await fetchPeopleGeo(lat, lng);
+	return people.filter(p => p.jurisdiction?.classification === 'state').map(toStateRep);
+}
+
+export async function getFederalLegislators(lat: number, lng: number): Promise<Representative[]> {
+	const people = await fetchPeopleGeo(lat, lng);
+	return people.filter(p => p.jurisdiction?.classification === 'country').map(toFederalRep);
+}
+
+export async function getAllLegislators(
+	lat: number,
+	lng: number
+): Promise<{ state: Representative[]; federal: Representative[] }> {
+	const people = await fetchPeopleGeo(lat, lng);
+	return {
+		state: people.filter(p => p.jurisdiction?.classification === 'state').map(toStateRep),
+		federal: people.filter(p => p.jurisdiction?.classification === 'country').map(toFederalRep)
+	};
 }
 
 // --- Bills ---
