@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { Mail, MapPin, Loader2, AlertCircle } from 'lucide-svelte';
 
 	interface Props {
@@ -54,15 +53,11 @@ Thank you for your time.`;
 				return;
 			}
 
-			const params = new URLSearchParams({
-				rep: data.rep.name,
-				email: data.rep.email,
-				level: data.rep.level || 'local',
-				subject: buildSubject(),
-				body: buildBody(data.rep.name)
-			});
-
-			goto(`/contact?${params.toString()}`);
+			const mailto = `mailto:${encodeURIComponent(data.rep.email)}?subject=${encodeURIComponent(buildSubject())}&body=${encodeURIComponent(buildBody(data.rep.name))}`;
+			window.location.href = mailto;
+			loading = false;
+			open = false;
+			address = '';
 		} catch {
 			error = 'Something went wrong. Please try again.';
 			loading = false;
