@@ -6,13 +6,21 @@ let sql: ReturnType<typeof postgres> | null = null;
 export function getDb() {
 	if (sql) return sql;
 
-	const url = env.DATABASE_URL;
+	// Consolidated onto the shared dashboard DB: when DB_SCHEMA is set we connect to
+	// SHARED_DB_URL and scope every connection to that schema via search_path. Unset it
+	// to instantly roll back to the original DATABASE_URL (still attached).
+	const schema = env.DB_SCHEMA;
+	const url = schema ? env.SHARED_DB_URL : env.DATABASE_URL;
 	if (!url) {
-		console.warn('DATABASE_URL not set — database features disabled');
+		console.warn('database URL not set — database features disabled');
 		return null;
 	}
 
-	sql = postgres(url, { ssl: 'require', max: 5 });
+	sql = postgres(url, {
+		ssl: 'require',
+		max: schema ? 3 : 5,
+		...(schema ? { connection: { search_path: `${schema},public` } } : {})
+	});
 	return sql;
 }
 
