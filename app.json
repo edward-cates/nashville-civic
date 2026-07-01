@@ -1,0 +1,14 @@
+{
+  "name": "nashville-civic",
+  "description": "Nashville local politics — find your council member and see what they voted on.",
+  "buildpacks": [{ "url": "heroku/nodejs" }],
+  "environments": {
+    "review": {
+      "addons": ["heroku-postgresql:essential-0"],
+      "env": {
+        "DB_SCHEMA": { "value": "" }
+      },
+      "formation": { "web": { "quantity": 1, "size": "basic" } }
+    }
+  }
+}
