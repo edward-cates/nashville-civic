@@ -4,7 +4,11 @@
 	import StoryCarousel from '$lib/components/StoryCarousel.svelte';
 	import TopicList from '$lib/components/TopicList.svelte';
 	import LoadingPulse from '$lib/components/LoadingPulse.svelte';
-	import { CalendarDays, Lightbulb, ArrowRight } from 'lucide-svelte';
+	import { CalendarDays, Lightbulb, ArrowRight, Vote } from 'lucide-svelte';
+	import { ELECTION, isBallotActive, arePollsClosed } from '$lib/ballot';
+
+	const showBallot = isBallotActive();
+	const pollsClosed = arePollsClosed();
 
 	// Initialize to a never-resolving promise so the SSR render shows the loading skeleton;
 	// replace with the real fetch once we're in the browser (relative URLs can't be fetched during SSR).
@@ -24,6 +28,20 @@
 		content="Find out who represents you in Nashville. Understand what's happening at Metro Council. Make your voice heard."
 	/>
 </svelte:head>
+
+{#if showBallot}
+	<a href="/elections#ballot" class="block bg-amber-400 text-civic-900 hover:bg-amber-300 transition-colors">
+		<div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-center gap-2 text-sm sm:text-base font-semibold text-center">
+			<Vote class="h-5 w-5 shrink-0" />
+			{#if pollsClosed}
+				The {ELECTION.dateLabel} election is over. See what was on the ballot
+			{:else}
+				Election day is {ELECTION.dateLabel}: governor, U.S. Senate, and 3 constitutional amendments. See your ballot
+			{/if}
+			<ArrowRight class="h-4 w-4 shrink-0" />
+		</div>
+	</a>
+{/if}
 
 <!-- Hero Section -->
 <section class="bg-civic-900 text-white py-16 sm:py-24">

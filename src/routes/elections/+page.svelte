@@ -1,5 +1,9 @@
 <script lang="ts">
 	import { Vote, CalendarCheck, MapPin, ClipboardCheck, ExternalLink } from 'lucide-svelte';
+	import CurrentBallot from '$lib/components/CurrentBallot.svelte';
+	import { isBallotActive } from '$lib/ballot';
+
+	const showBallot = isBallotActive();
 </script>
 
 <svelte:head>
@@ -15,6 +19,10 @@
 		</p>
 	</div>
 </section>
+
+{#if showBallot}
+	<CurrentBallot />
+{/if}
 
 <!-- Quick Actions -->
 <section class="py-12 sm:py-16">
@@ -112,8 +120,8 @@
 				<h3 class="font-semibold text-gray-900 text-lg mb-2">When are elections?</h3>
 				<div class="space-y-3 text-gray-600">
 					<p><strong>Metro Council & Mayor:</strong> Every 4 years. Current term is 2023–2027. Next Nashville election: <strong>August 2027</strong>.</p>
-					<p><strong>State legislature:</strong> State House members every 2 years, State Senators every 4. Next state election: <strong>November 2026</strong>.</p>
-					<p><strong>Federal:</strong> U.S. House every 2 years, U.S. Senate every 6 (staggered). Next federal election: <strong>November 2026</strong>.</p>
+					<p><strong>State legislature:</strong> State House members every 2 years, State Senators every 4. Next state election: <strong>November 3, 2026</strong>.</p>
+					<p><strong>Federal:</strong> U.S. House every 2 years, U.S. Senate every 6 (staggered). Next federal election: <strong>November 3, 2026</strong>.</p>
 					<p><strong>Presidential:</strong> Every 4 years. Next: <strong>November 2028</strong>.</p>
 				</div>
 			</div>
