@@ -11,6 +11,7 @@
 		AMENDMENTS_URL,
 		POLLING_PLACE_URL,
 		GOVOTETN_URL,
+		VOTER_GUIDE_URL,
 		arePollsClosed,
 		type Race
 	} from '$lib/ballot';
@@ -39,12 +40,24 @@
 		{/if}
 		<ul class="mt-3 space-y-1.5 text-sm">
 			{#each race.candidates as c}
-				<li class="flex justify-between gap-3">
-					<span class="text-gray-800">{c.name}</span>
-					{#if c.party}<span class="shrink-0 {partyClass(c.party)}">{c.party}</span>{/if}
+				<li>
+					<div class="flex justify-between gap-3">
+						<span class="text-gray-800 {c.positions ? 'font-semibold' : ''}">{c.name}</span>
+						{#if c.party}<span class="shrink-0 {partyClass(c.party)}">{c.party}</span>{/if}
+					</div>
+					{#if c.positions}
+						<ul class="mt-1 mb-2 ml-4 list-disc space-y-0.5 text-gray-600">
+							{#each c.positions as p}<li>{p}</li>{/each}
+						</ul>
+					{/if}
 				</li>
 			{/each}
 		</ul>
+		{#if race.guideUrl}
+			<a href={race.guideUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs text-civic-700 underline mt-3">
+				Full comparison <ExternalLink class="h-3 w-3" />
+			</a>
+		{/if}
 	</div>
 {/snippet}
 
@@ -92,14 +105,28 @@
 					<h4 class="text-lg font-semibold text-gray-900 mt-1">{a.title}</h4>
 					<p class="text-gray-600 mt-2 leading-relaxed">{a.summary}</p>
 					<div class="grid sm:grid-cols-2 gap-3 mt-4 text-sm">
-						<div class="rounded-lg bg-emerald-50 p-3"><span class="font-semibold text-emerald-800">Yes:</span> <span class="text-gray-700">{a.yesMeans}</span></div>
-						<div class="rounded-lg bg-gray-100 p-3"><span class="font-semibold text-gray-800">No:</span> <span class="text-gray-700">{a.noMeans}</span></div>
+						<div class="rounded-lg bg-emerald-50 p-4">
+							<p><span class="font-semibold text-emerald-800">Yes:</span> <span class="text-gray-700">{a.yesMeans}</span></p>
+							<p class="font-semibold text-gray-800 mt-3">The case for</p>
+							<p class="text-xs text-gray-500">{a.supporters.who}</p>
+							<ul class="mt-1.5 ml-4 list-disc space-y-1 text-gray-700">
+								{#each a.supporters.args as arg}<li>{arg}</li>{/each}
+							</ul>
+						</div>
+						<div class="rounded-lg bg-gray-100 p-4">
+							<p><span class="font-semibold text-gray-800">No:</span> <span class="text-gray-700">{a.noMeans}</span></p>
+							<p class="font-semibold text-gray-800 mt-3">The case against</p>
+							<p class="text-xs text-gray-500">{a.opponents.who}</p>
+							<ul class="mt-1.5 ml-4 list-disc space-y-1 text-gray-700">
+								{#each a.opponents.args as arg}<li>{arg}</li>{/each}
+							</ul>
+						</div>
 					</div>
 				</div>
 			{/each}
 		</div>
 		<p class="text-xs text-gray-500 mt-3">
-			Plain-language summaries by Nashville Civic. Read the exact ballot wording at the
+			Plain-language summaries and arguments compiled by Nashville Civic from news coverage (Tennessee Lookout, WSMV, Axios, Nashville Scene); we don't take sides. Read the exact ballot wording at the
 			<a href={AMENDMENTS_URL} target="_blank" rel="noopener noreferrer" class="underline">Tennessee Secretary of State</a>.
 		</p>
 
@@ -117,6 +144,8 @@
 			You'll see one U.S. House race and one TN House race, plus a TN Senate race if your district is up this year.
 			Not sure of your districts? <a href="/your-nashville" class="text-civic-700 underline">Look up your reps</a> or check
 			<a href={GOVOTETN_URL} target="_blank" rel="noopener noreferrer" class="text-civic-700 underline">GoVoteTN</a>.
+			For state legislative candidates' positions, see the
+			<a href={VOTER_GUIDE_URL} target="_blank" rel="noopener noreferrer" class="text-civic-700 underline">Tennessee Lookout voter guide</a>.
 		</p>
 		{#each DISTRICT_RACES as group}
 			<details class="mt-4 group bg-white/60 rounded-xl border border-amber-100">
